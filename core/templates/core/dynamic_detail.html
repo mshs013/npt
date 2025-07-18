@@ -1,0 +1,32 @@
+{% extends "core/base.html" %}
+{% load custom_filters static i18n %}
+
+{% block content_title %}Detail of {{ object }}{% endblock %}
+
+{% block page_actions %}
+    <div class="col-12 col-md-auto d-flex align-items-center justify-content-end page-actions">
+        <a class="btn btn-success float-right back-link" href="{% url view_url %}"><i class="fas fa-step-backward"></i> {{ opts.verbose_name }}</a>
+    </div>
+{% endblock %}
+
+{% block content %}
+<div class="col-12 col-lg-12">
+    <div class="card">
+        <div class="card-body">
+            {% for field, value in fields.items %}
+            <div class="form-group field-is_parent">
+                <div class="row">                    
+                    <label class="col-sm-3 text-left" for="id_is_parent">{{ field|humanize_field_name }}</label>
+                    <div class=" col-sm-7 field-{{ field }}">                            
+                        <div class="readonly">
+                            {{ value|safe }}
+                        </div> 
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+<a href="{% url view_url %}" class="btn btn-secondary">Back to list</a>
+{% endblock %}

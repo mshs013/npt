@@ -1,0 +1,45 @@
+{% load i18n %}
+
+<div class="row">
+    <div class="col-5">
+        <div class="dataTables_info" role="status" aria-live="polite">
+            {{ result_count }}
+            {% if result_count == 1 %}
+                {{ opts.verbose_name }}
+            {% else %}
+                {{ opts.verbose_name_plural }}
+            {% endif %}
+        </div>
+    </div>
+    <div class="col-7">
+        <ul class="pagination pagination-sm m-0 float-right">
+            {% if pagination_required %}
+                <li class="page-item {% if not cl.has_previous %}disabled{% endif %}">
+                    <a class="page-link" href="?page=1">{% trans 'First' %}</a>
+                </li>
+                <li class="page-item {% if not cl.has_previous %}disabled{% endif %}">
+                    {% if cl.has_previous %}
+                        <a class="page-link" href="?page={{ cl.previous_page_number }}">&laquo;</a>
+                    {% else %}
+                        <span class="page-link">&laquo;</span>
+                    {% endif %}
+                </li>
+                {% for i in page_range %}
+                    <li class="page-item {% if cl.number == i %}active{% endif %}">
+                        <a class="page-link" href="?page={{ i }}">{{ i }}</a>
+                    </li>
+                {% endfor %}
+                <li class="page-item {% if not cl.has_next %}disabled{% endif %}">
+                    {% if cl.has_next %}
+                        <a class="page-link" href="?page={{ cl.next_page_number }}">&raquo;</a>
+                    {% else %}
+                        <span class="page-link">&raquo;</span>
+                    {% endif %}
+                </li>
+                <li class="page-item {% if not cl.has_next %}disabled{% endif %}">
+                    <a class="page-link" href="?page={{ cl.paginator.num_pages }}">{% trans 'Last' %}</a>
+                </li>
+            {% endif %}
+        </ul>
+    </div>
+</div>

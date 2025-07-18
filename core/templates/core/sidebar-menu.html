@@ -1,0 +1,21 @@
+{% load static menu_tags %}
+<!-- Sidebar -->
+<div class="sidebar">
+    <!-- Sidebar user panel (optional) -->
+    <div class="user-panel mt-3 pb-3 mb-3 d-flex">
+        <div class="image">
+            <img src="{% get_media_prefix %}{{ request.user.profile.user_img }}" class="img-circle elevation-2" alt="{{ request.user }} Image">
+        </div>
+        <div class="info">
+            <a href="{% url 'change_user' request.user.pk %}" class="d-block">{{ request.user }}</a>
+        </div>
+    </div>
+
+    <!-- Sidebar Menu -->
+    <nav class="mt-2">
+        {% render_menu %}
+    </nav>
+    <!-- /.sidebar-menu -->
+</div>
+<!-- /.sidebar -->
+  

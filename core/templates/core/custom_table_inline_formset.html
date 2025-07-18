@@ -1,0 +1,26 @@
+<!-- templates/custom_table_inline_formset.html -->
+{% load crispy_forms_tags %}
+
+<table class="table table-bordered">
+    <!-- Table header -->
+    <thead>
+        <tr>
+            {% for field in formset.forms.0 %}
+                <th>{{ field.label }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+
+    <!-- Table body -->
+    <tbody>
+        {% for form in formset %}
+            <tr>
+                {% for field in form %}
+                    <td>
+                        {{ field }}
+                    </td>
+                {% endfor %}
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>

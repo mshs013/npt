@@ -1,0 +1,10 @@
+{% for related in related_objects %}
+    <li>
+        {{ related.0|safe }}
+        {% if related.1 %}
+            <ul>
+                {% include "core/related_objects_list.html" with related_objects=related.1 %}
+            </ul>
+        {% endif %}
+    </li>
+{% endfor %}

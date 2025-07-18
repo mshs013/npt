@@ -1,0 +1,12 @@
+# Ignore pycache
+__pycache__/
+
+# Ignore the virtual environment folder
+.venv/
+
+# Ignore static files folder
+staticfiles/
+menu_cache/
+
+# Ignore specific files
+.env

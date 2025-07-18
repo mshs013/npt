@@ -1,0 +1,143 @@
+<!-- templates/core/dynamic_multiform.html -->
+{% extends "core/base.html" %}
+{% load crispy_forms_tags custom_filters static jazzmin i18n %}
+
+{% block content_title %}
+    {% if pk %}
+        Edit {{ base_model_name }}
+    {% else %}
+        Add {{ base_model_name }}
+    {% endif %}
+{% endblock %}
+
+{% block page_actions %}
+    <div class="col-12 col-md-auto d-flex align-items-center justify-content-end page-actions">
+        <a class="btn btn-success float-right back-link" href="{% url view_url %}"><i class="fas fa-step-backward"></i> {{ base_model_name }}</a>
+    </div>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-body">
+        
+        <form method="post" {% if has_file_field %}enctype="multipart/form-data"{% endif %} novalidate>
+        
+        {% crispy head_form %}
+
+        {% for formset in body_formsets %}
+            <!--h2>{{ model_name }}</h2-->
+            {{ formset.formset.management_form|crispy }} <!-- Render management form fields -->
+
+            {% if is_form_row %}
+            <div class="form-group text-right">
+                <button type="button" class="btn btn-info" onclick="addForm('{{ formset.prefix }}')"><i class="fa fa-plus-circle"></i> Add Row</button>
+            </div>
+            {% endif %}
+            <div id="formset-{{ formset.prefix }}">
+                {% for form in formset.formset %}
+                    <div {% if is_form_row %}class="form-row align-items-end"{% endif %} data-form-index="{{ forloop.counter0 }}">
+                        <!-- Render form fields using crispy without additional form tags -->
+                        {% crispy form %}
+                        {% if is_form_row %}
+                        <div class="form-group button-wrapper">
+                            <button type="button" class="btn dtn-delete btn-danger" data-action="delete-form"><i class="fas fa-trash"></i></button>
+                        </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endfor %}
+
+        <button type="submit" class="btn btn-primary">{{ 'Save' }}</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function addForm(prefix) {
+    // Get the current number of forms from Django's management form
+    var formIndex = $(document).find("input[name$='-TOTAL_FORMS']").val();
+    var formsetDiv = $(document).find('#formset-' + prefix);
+    var newForm = formsetDiv.find('.form-row:last').clone(false); // Clone the last form (no deep cloning to avoid event binding issues)
+
+    // Update the cloned form's field names, IDs, and wrapping div IDs with the new index
+    newForm.find(':input').each(function() {
+        var $this = $(this);
+        var name = $this.attr('name');
+        var id = $this.attr('id');
+        
+        if (name) {
+            // Replace the index in the name attribute
+            var newName = name.replace(/-\d+-/, '-' + formIndex + '-');
+            $this.attr('name', newName);
+        }
+
+        if (id) {
+            // Replace the index in the id attribute
+            var newId = id.replace(/-\d+-/, '-' + formIndex + '-');
+            $this.attr('id', newId);
+
+            // Update the label to match the new input id
+            var label = $this.closest('.form-group').find('label[for="' + id + '"]'); // Find the label in the same form-group
+            if (label.length) {  // Check if the label exists
+                label.attr('for', newId); // Update the label's 'for' attribute
+            }
+        }
+
+        // Clear the value for the new form
+        if ($this.attr('type') != 'hidden' && $this.attr('type') != 'checkbox') {
+            $this.val(''); // Clear the input field (for text, select, etc.)
+        }
+
+        // Uncheck checkboxes, including the DELETE checkbox
+        if ($this.attr('type') === 'checkbox') {
+            $this.prop('checked', false); // Uncheck checkboxes
+        }
+    });
+
+    // Update the wrapping div's IDs
+    newForm.find('.form-group').each(function() {
+        var $this = $(this);
+        var id = $this.attr('id');
+        if (id) {
+            // Replace index in id attribute of wrapping divs
+            var newId = id.replace(/-\d+-/, '-' + formIndex + '-');
+            $this.attr('id', newId);
+        }
+    });
+
+    // Handle the DELETE field if it's present
+    newForm.find('input[name$="-DELETE"]').prop('checked', false); // Ensure DELETE checkbox is not checked
+    newForm.find('input[name$="-id"]').val(''); // Clear the hidden id field
+
+    // Append the cloned form to the formset
+    formsetDiv.append(newForm);
+
+    // Increment the total form count in Django's management form
+    $("input[name$='-TOTAL_FORMS']").val(parseInt(formIndex) + 1);
+}
+
+$(document).ready(function() {
+    // Hide delete checkboxes initially if using custom styles
+    $('.custom-delete-checkbox').each(function() {
+        // You can hide these or leave them visible
+        $(this).closest('.form-group').addClass('d-none');
+    });
+});
+
+// Delete button handler to mark the form for deletion
+$(document).on('click', 'button[data-action="delete-form"]', function() {
+    var formRow = $(this).closest('.form-row');
+
+    // Mark the hidden DELETE checkbox for this form as true
+    formRow.find('input[name$="-DELETE"]').prop('checked', true);
+
+    // Optionally hide the form row (you can style it as deleted)
+    formRow.addClass('d-none'); // You can also use `addClass('d-none')` for better CSS control
+});
+
+    
+</script>      
+{% endblock %}

@@ -1,0 +1,22 @@
+#changelist-search .form-group { margin-bottom: .5em; margin-right: .5em; }
+.asteriskField { color: #dc3545; }
+.select2-container--bootstrap4.select2-container--focus .select2-selection { box-shadow: none; }
+.form-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px; /* Space between the grid items */
+    flex-wrap: nowrap; /* Prevent wrapping to keep everything on one line */
+}
+
+.form-row .dtn-delete {
+    align-items: flex-end;
+    height: calc(1.5em + .75rem + 2px); /* Same height as .form-control */
+    padding: .375rem .75rem; /* Adjust padding to match .form-control */
+    font-size: 1rem; /* Same font size as .form-control */
+    line-height: 1.5; /* Adjust line height to match .form-control */
+}
+
+.company-name {
+	font-size: 2rem;
+	line-height: 1.3rem;
+}

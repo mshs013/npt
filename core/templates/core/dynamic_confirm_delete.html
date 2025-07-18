@@ -1,0 +1,52 @@
+{% extends "core/base.html" %}
+{% load i18n static admin_urls %}
+
+{% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }} delete-confirmation{% endblock %}
+
+{% block content_title %} {% trans 'Delete' %} {% endblock %}
+
+{% block content %}
+    <div class="card card-danger card-outline">
+        <div class="card-header with-border">
+            <h4 class="card-title">
+                Delete {{ object_name }}
+            </h4>
+        </div>
+
+        <div class="card-body">
+            <div id="content-main">
+                <p>Are you sure you want to delete the {{ opts.verbose_name|capfirst }} "{{ object_name }}"? All of the following related items will be deleted:</p>
+                <div class="row">
+                    <div class="col-12 col-sm-9">
+                        <h4>Objects</h4>
+                        <ol>
+                            {{ related_objects|unordered_list }}
+                        </ol>
+                    </div>
+                    <div class="col-12 col-sm-3">
+                        <h4>Summary</h4>
+                        <table class="table table-striped">
+                            <tbody>
+                            {% for model_name, object_count in model_count.items %}
+                                <tr>
+                                    <td>{{ model_name|capfirst }}</td>
+                                    <td>{{ object_count }}</td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                        <form method="post">
+                            {% csrf_token %}
+                            <div class="form-group">
+                                <input type="submit" class="btn btn-danger form-control" value="Yes, I’m sure">
+                            </div>
+                            <div class="form-group">
+                                <a href="{% url view_link %}" class="btn btn-danger cancel-link form-control back-link">No, take me back</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
