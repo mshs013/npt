@@ -1,170 +1,480 @@
-### Django Commands with Examples
+# 🚀 Deployment Guide for NPT (Django)
 
-1. **startproject <projectname>**
-    - **Description**: Creates a new Django project directory structure.
-    - **Example**: `django-admin startproject myproject`
-    - **Documentation**: Initializes the settings for a new Django project with a default structure. This is the first command when starting a new Django app.
+This guide walks you through deploying the **NPT** Django application using PostgreSQL, Gunicorn, Nginx, and systemd on Ubuntu (22.04 or later).
 
-2. **startapp <appname>**
-    - **Description**: Creates a new Django app within the project.
-    - **Example**: `python manage.py startapp blog`
-    - **Documentation**: Generates the necessary files for a new app like models, views, and admin configurations.
+---
 
-3. **makemigrations [appname]**
-    - **Description**: Creates migrations based on model changes.
-    - **Example**: `python manage.py makemigrations blog`
-    - **Documentation**: Detects changes in models and prepares migration files for database schema updates.
+## 1. 🧰 Server Preparation
 
-4. **migrate [appname]**
-    - **Description**: Applies migrations to the database.
-    - **Example**: `python manage.py migrate blog`
-    - **Documentation**: Syncs the database schema with your models and applied migrations.
+### Install Required Packages
 
-5. **sqlmigrate <appname> <migration_number>**
-    - **Description**: Displays the SQL statements for a migration.
-    - **Example**: `python manage.py sqlmigrate blog 0001`
-    - **Documentation**: Shows the SQL commands that will be run by a specific migration.
+```bash
+sudo apt update
+sudo apt install python3-venv python3-dev libpq-dev postgresql postgresql-contrib nginx curl
+```
 
-6. **showmigrations [appname]**
-    - **Description**: Lists migrations and their status.
-    - **Example**: `python manage.py showmigrations blog`
-    - **Documentation**: Displays a list of all available migrations and indicates which have been applied.
+---
 
-7. **createsuperuser**
-    - **Description**: Creates a superuser for Django’s admin.
-    - **Example**: `python manage.py createsuperuser`
-    - **Documentation**: A user with full permissions can be created through an interactive prompt.
+## 2. 🐘 PostgreSQL Setup
 
-8. **changepassword <username>**
-    - **Description**: Changes a user’s password.
-    - **Example**: `python manage.py changepassword admin`
-    - **Documentation**: Allows resetting the password for any user.
+### Create Database and User
 
-9. **shell**
-    - **Description**: Opens a Python shell with Django context loaded.
-    - **Example**: `python manage.py shell`
-    - **Documentation**: Useful for testing and interacting with your Django project programmatically.
+```bash
+sudo -u postgres psql
+```
 
-10. **runserver [port]**
-    - **Description**: Runs the development server.
-    - **Example**: `python manage.py runserver 8080`
-    - **Documentation**: Starts a local web server for testing the project.
+Inside the shell:
 
-11. **runserver_plus [port]**
-    - **Description**: Enhanced version of runserver (requires `django-extensions`).
-    - **Example**: `python manage.py runserver_plus 8080`
-    - **Documentation**: Offers more debugging features and tools for running the server.
+```sql
+CREATE DATABASE npt;
+CREATE USER ocms WITH PASSWORD 'Ocmsbd.com2016';
+ALTER ROLE ocms SET client_encoding TO 'utf8';
+ALTER ROLE ocms SET default_transaction_isolation TO 'read committed';
+ALTER ROLE ocms SET timezone TO 'Asia/Dhaka';
+GRANT ALL PRIVILEGES ON DATABASE npt TO ocms;
+ALTER DATABASE npt OWNER TO ocms;
+\q
+```
 
-12. **test [appname]**
-    - **Description**: Runs the test suite.
-    - **Example**: `python manage.py test blog`
-    - **Documentation**: Executes the unit tests for your Django project or specific apps.
+---
 
-13. **testserver <fixture>**
-    - **Description**: Runs a server with fixture data loaded.
-    - **Example**: `python manage.py testserver data.json`
-    - **Documentation**: Useful for testing specific datasets on a temporary server.
+## 3. 📦 Clone and Setup Project
 
-14. **collectstatic**
-    - **Description**: Collects static files into `STATIC_ROOT`.
-    - **Example**: `python manage.py collectstatic`
-    - **Documentation**: Gathers static files from your apps and third-party packages into a single directory for production.
+```bash
+mkdir ~/npt
+cd ~/npt
+git clone https://github.com/mshs013/npt .
+```
 
-15. **findstatic <file>**
-    - **Description**: Locates a static file.
-    - **Example**: `python manage.py findstatic style.css`
-    - **Documentation**: Finds a static file in your `STATICFILES_DIRS` and app directories.
+### Create Virtual Environment
 
-16. **loaddata <fixture>**
-    - **Description**: Loads data from fixture files into the database.
-    - **Example**: `python manage.py loaddata initial_data.json`
-    - **Documentation**: Populates the database with initial data or data from fixtures (JSON, XML, YAML).
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
 
-17. **dumpdata [appname] --output=<filename>**
-    - **Description**: Outputs the contents of the database as a fixture.
-    - **Example**: `python manage.py dumpdata blog --output=data.json`
-    - **Documentation**: Dumps the contents of a model or app into a fixture file.
+---
 
-18. **check**
-    - **Description**: Checks for project configuration issues.
-    - **Example**: `python manage.py check`
-    - **Documentation**: Runs system checks for potential errors and misconfigurations in your project.
+## 4. 🔐 Setup Environment Variables
 
-19. **diffsettings**
-    - **Description**: Displays differences between your settings and Django defaults.
-    - **Example**: `python manage.py diffsettings`
-    - **Documentation**: Helps to identify settings you’ve customized compared to Django’s default settings.
+Create a `.env` file in the project root:
 
-20. **dbshell**
-    - **Description**: Opens the database shell.
-    - **Example**: `python manage.py dbshell`
-    - **Documentation**: Gives you direct access to your database via the command line.
+```ini
+SECRET_KEY=your-django-secret-key
+DEBUG=False
+DB_ENGINE=django.db.backends.postgresql
+DB_NAME=npt
+DB_USER=ocms
+DB_PASS=Ocmsbd.com2016
+DB_HOST=localhost
+DB_PORT=5432
+```
 
-21. **flush**
-    - **Description**: Removes all data from the database but keeps the schema intact.
-    - **Example**: `python manage.py flush`
-    - **Documentation**: Clears all the data from the database without removing the structure (tables).
+---
 
-22. **sqlflush**
-    - **Description**: Outputs SQL statements required to flush the database.
-    - **Example**: `python manage.py sqlflush`
-    - **Documentation**: Useful for understanding how Django manages data removal.
+## 5. ⚙️ Django Configuration
 
-23. **inspectdb**
-    - **Description**: Generates models based on an existing database schema.
-    - **Example**: `python manage.py inspectdb`
-    - **Documentation**: Generates Python code for models based on the current database tables.
+In npt/settings.py, add:
 
-24. **migrate [appname] [migration_name]**
-    - **Description**: Applies a specific migration.
-    - **Example**: `python manage.py migrate blog 0002`
-    - **Documentation**: Runs a specific migration to update the database.
+```python
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
-25. **runserver_plus**
-    - **Description**: Runs the development server with advanced debugging.
-    - **Example**: `python manage.py runserver_plus`
-    - **Documentation**: A version of runserver with more tools and features (requires `django-extensions`).
+SECRET_KEY = os.getenv('SECRET_KEY')
+DEBUG = os.getenv('DEBUG')
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
 
-26. **shell_plus**
-    - **Description**: An enhanced shell that auto-imports models (requires `django-extensions`).
-    - **Example**: `python manage.py shell_plus`
-    - **Documentation**: Opens a Python shell with models and other project components automatically imported.
+INSTALLED_APPS = [
+    'jazzmin',
+    'django_filters',
+    'crispy_forms',
+    'crispy_bootstrap4',
+    'import_export',
+    'django_summernote',
+    'django_extensions',
+    'debug_toolbar',
+    'core',
+]
 
-27. **graph_models --output=<filename>**
-    - **Description**: Generates a visual diagram of your models.
-    - **Example**: `python manage.py graph_models --output=model_diagram.png`
-    - **Documentation**: Useful for visualizing model relationships (requires `django-extensions` and `pygraphviz`).
+MIDDLEWARE = [
+    ...,
+    'debug_toolbar.middleware.DebugToolbarMiddleware',
+    'core.middleware.CurrentUserAndIdleTimeoutMiddleware',
+]
 
-28. **debugsqlshell**
-    - **Description**: Opens a shell with SQL query logging enabled.
-    - **Example**: `python manage.py debugsqlshell`
-    - **Documentation**: Useful for debugging SQL queries (requires `django-debug-toolbar`).
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                ...,
+                'core.context_processors.adminlte_settings',
+            ],
+        },
+    },
+]
 
+DATABASES = {
+    'default': {
+        'ENGINE': os.getenv('DB_ENGINE'),
+        'NAME': os.getenv('DB_NAME'),
+        'USER': os.getenv('DB_USER'),
+        'PASSWORD': os.getenv('DB_PASS'),
+        'HOST': os.getenv('DB_HOST'),
+        'PORT': os.getenv('DB_PORT'),
+    }
+}
 
-### PostgreSQL Commands for Django Setup
+STATIC_URL = 'static/'
+STATICFILES_DIRS = [BASE_DIR / "static"]
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
-1. **Login to PostgreSQL**
-    - **Command**: `sudo -u postgres psql`
-    - **Description**: Logs in as the PostgreSQL superuser.
-    - **Example**: `sudo -u postgres psql`
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
-2. **Create Database User**
-    - **Command**: `CREATE USER <username> WITH PASSWORD '<password>';`
-    - **Description**: Creates a new PostgreSQL user with a specified password.
-    - **Example**: `CREATE USER myuser WITH PASSWORD 'mypassword';`
+AUTH_USER_MODEL = "core.User"
 
-3. **Create Database**
-    - **Command**: `CREATE DATABASE <dbname> OWNER <username>;`
-    - **Description**: Creates a new PostgreSQL database and assigns ownership to the user.
-    - **Example**: `CREATE DATABASE mydb OWNER myuser;`
+SESSION_IDLE_TIMEOUT = 600
+LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/'
 
-4. **Grant Permissions to User**
-    - **Command**: `GRANT ALL PRIVILEGES ON DATABASE <dbname> TO <username>;`
-    - **Description**: Grants all privileges on the specified database to the user.
-    - **Example**: `GRANT ALL PRIVILEGES ON DATABASE mydb TO myuser;`
+PUBLIC_PATHS = ['/login/', '/static/', '/media/']
 
-5. **Exit PostgreSQL**
-    - **Command**: `\q`
-    - **Description**: Exits the PostgreSQL session.
-    - **Example**: `\q`
+# Auth User Model
+AUTH_USER_MODEL = "core.User"
 
+# Set idle session timeout (in seconds)
+SESSION_IDLE_TIMEOUT = 600  # 10 minutes
+
+LOGIN_URL = '/login/'  # This should match your login URL pattern
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/'
+
+ADMINLTE_SETTINGS = {
+    # title of the window (Will default to site_title if absent or None)
+    "site_title": "NPT",
+    # Dark Mode
+    "dark_mode": False,
+
+    # Header Options
+    "header_fixed": False,
+    "dropdown_legacy_offset": False,
+    "no_border": False,
+
+    # Sidebar Options
+    "sidebar_collapsed": False,
+    "sidebar_fixed": True,
+    "sidebar_mini": True,
+    "sidebar_mini_md": False,
+    "sidebar_mini_xs": False,
+    "nav_flat_style": False,
+    "nav_legacy_style": False,
+    "nav_compact": False,
+    "nav_child_indent": False,
+    "nav_child_hide_on_collapse": False,
+    "disable_hover_expand": False,
+
+    # Footer Options
+    "footer_fixed": True,
+
+    # Small Text Options
+    "small_text_body": False,
+    "small_text_navbar": False,
+    "small_text_brand": False,
+    "small_text_sidebar": False,
+    "small_text_footer": False,
+
+    # Navbar Variants (Light/Dark)
+    "navbar_variant": "bg-lightblue",  # Options like navbar-dark, navbar-primary, etc.
+
+    # Accent Color Variants
+    "accent_color": "",  # Options like accent-danger, accent-warning, etc.
+
+    # Sidebar Variants
+    "sidebar_dark_variant": "sidebar-dark-primary",  # Options like sidebar-dark-danger, sidebar-dark-warning
+    "sidebar_light_variant": "",  # Options like sidebar-light-warning, sidebar-light-danger
+
+    # Brand Logo Variants
+    "brand_logo_variant": "",  # Options like navbar-dark, navbar-light
+}
+
+JAZZMIN_SETTINGS = {
+    # title of the window (Will default to current_admin_site.site_title if absent or None)
+    "site_title": "NPT",
+
+    # Title on the login screen (19 chars max) (defaults to current_admin_site.site_header if absent or None)
+    "site_header": "NPT",
+
+    # Title on the brand (19 chars max) (defaults to current_admin_site.site_header if absent or None)
+    "site_brand": "NPT",
+
+    # Logo to use for your site, must be present in static files, used for brand on top left
+    "site_logo": "logo/logo.png",
+
+    # Logo to use for your site, must be present in static files, used for login form logo (defaults to site_logo)
+    "login_logo": None,
+
+    # Logo to use for login form in dark themes (defaults to login_logo)
+    "login_logo_dark": None,
+
+    # CSS classes that are applied to the logo above
+    "site_logo_classes": "img-circle",
+
+    # Relative path to a favicon for your site, will default to site_logo if absent (ideally 32x32 px)
+    "site_icon": True,
+
+    # Welcome text on the login screen
+    "welcome_sign": "Welcome to the NPT",
+
+    # Copyright on the footer
+    "copyright": "OCMS",
+
+    # Field name on user model that contains avatar ImageField/URLField/Charfield or a callable that receives the user
+    "user_avatar": False,
+    
+    #############
+    # Side Menu #
+    #############
+
+    # Whether to display the side menu
+    "show_sidebar": True,
+
+    # Whether to aut expand the menu
+    "navigation_expanded": False,
+
+    # Hide these apps when generating side menu e.g (auth)
+    "hide_apps": [],
+
+    # Hide these models when generating side menu (e.g auth.user)
+    "hide_models": [],
+
+    # List of apps (and/or models) to base side menu ordering off of (does not need to contain all apps/models)
+    "order_with_respect_to": [],
+    
+    # Custom icons for side menu apps/models See https://fontawesome.com/icons?d=gallery&m=free&v=5.0.0,5.0.1,5.0.10,5.0.11,5.0.12,5.0.13,5.0.2,5.0.3,5.0.4,5.0.5,5.0.6,5.0.7,5.0.8,5.0.9,5.1.0,5.1.1,5.2.0,5.3.0,5.3.1,5.4.0,5.4.1,5.4.2,5.13.0,5.12.0,5.11.2,5.11.1,5.10.0,5.9.0,5.8.2,5.8.1,5.7.2,5.7.1,5.7.0,5.6.3,5.5.0,5.4.2
+    # for the full list of 5.13.0 free icon classes
+    "icons": {
+        "auth": "fas fa-users-cog",
+        "auth.user": "fas fa-user",
+        "auth.Group": "fas fa-users",
+        "auth.permission": "fas fa-key",
+        "ocmscore": "fas fa-cogs",
+    },
+    # Icons that are used when one is not manually specified
+    "default_icon_parents": "fas fa-chevron-circle-right",
+    "default_icon_children": "fas fa-circle",
+
+    #################
+    # Related Modal #
+    #################
+    # Use modals instead of popups
+    "related_modal_active": False,
+
+    #############
+    # UI Tweaks #
+    #############
+    # Relative paths to custom CSS/JS scripts (must be present in static files)
+    "custom_css": 'assets/css/admin-theme.css',
+    "custom_js": None,
+    # Whether to link font from fonts.googleapis.com (use custom_css to supply font otherwise)
+    "use_google_fonts_cdn": False,
+    # Whether to show the UI customizer on the sidebar
+    "show_ui_builder": False,
+
+    ###############
+    # Change view #
+    ###############
+    # Render out the change view as a single form, or in tabs, current options are
+    # - single
+    # - horizontal_tabs (default)
+    # - vertical_tabs
+    # - collapsible
+    # - carousel
+    "changeform_format": "single",
+    # override change forms on a per modeladmin basis
+    "changeform_format_overrides": {"auth.user": "collapsible", "auth.group": "vertical_tabs"},
+    # Add a language dropdown into the admin
+    #"language_chooser": True,
+}
+
+SUMMERNOTE_THEME = 'bs4'  # Show summernote with Bootstrap4
+
+SUMMERNOTE_CONFIG = {
+    'iframe': True,
+    'height': 400,
+    'width': '100%',
+    'toolbar': [
+        ['style', ['style']],
+        ['font', ['bold', 'underline', 'clear']],
+        ['color', ['color']],
+        ['para', ['ul', 'ol', 'paragraph']],
+        ['table', ['table']],
+        ['insert', ['link', 'picture', 'video']],
+        ['view', ['fullscreen', 'codeview', 'help']],
+    ],
+}
+```
+
+---
+
+## 6. 📁 Database & Static Files
+
+```bash
+python manage.py makemigrations
+python manage.py migrate
+python manage.py createsuperuser
+python manage.py collectstatic
+```
+
+---
+
+## 7. 🔥 Gunicorn Setup
+
+### Create Gunicorn Socket
+
+```bash
+sudo nano /etc/systemd/system/gunicorn.socket
+```
+
+Paste:
+
+```ini
+[Unit]
+Description=gunicorn socket
+
+[Socket]
+ListenStream=/run/gunicorn.sock
+
+[Install]
+WantedBy=sockets.target
+```
+
+---
+
+### Create Gunicorn Service
+
+```bash
+sudo nano /etc/systemd/system/gunicorn.service
+```
+
+Paste:
+
+```ini
+[Unit]
+Description=gunicorn daemon
+Requires=gunicorn.socket
+After=network.target
+
+[Service]
+User=sazzad
+Group=www-data
+WorkingDirectory=/home/sazzad/npt
+ExecStart=/home/sazzad/npt/.venv/bin/gunicorn \
+          --access-logfile - \
+          --workers 3 \
+          --bind unix:/run/gunicorn.sock \
+          npt.wsgi:application
+
+[Install]
+WantedBy=multi-user.target
+```
+
+---
+
+### Enable and Start Gunicorn
+
+```bash
+sudo systemctl start gunicorn.socket
+sudo systemctl enable gunicorn.socket
+sudo systemctl daemon-reload
+sudo systemctl restart gunicorn
+```
+
+---
+
+## 8. 🌐 Nginx Setup
+
+### Create Nginx Config
+
+```bash
+sudo nano /etc/nginx/sites-available/npt
+```
+
+Paste:
+
+```nginx
+server {
+    listen 80;
+    server_name localhost;
+
+    location = /favicon.ico { access_log off; log_not_found off; }
+
+    location /static/ {
+        alias /home/sazzad/npt/staticfiles/;
+    }
+
+    location /media/ {
+        alias /home/sazzad/npt/media/;
+    }
+
+    location / {
+        include proxy_params;
+        proxy_pass http://unix:/run/gunicorn.sock;
+    }
+}
+```
+
+Enable the site:
+
+```bash
+sudo ln -s /etc/nginx/sites-available/npt /etc/nginx/sites-enabled
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+---
+
+## 9. 🔐 Firewall Setup
+
+```bash
+sudo ufw delete allow 8000
+sudo ufw allow 'Nginx Full'
+```
+
+---
+
+## 10. ✅ Access Application
+
+- App: `http://your_server_ip/`
+- Admin: `http://your_server_ip/admin/`
+
+---
+
+## 11. 🧪 Useful Debug Commands
+
+```bash
+sudo systemctl status gunicorn
+sudo systemctl status nginx
+journalctl -u gunicorn
+```
+
+---
+
+## 📌 Notes
+
+- Make sure your project paths match your server username and location.
+- Store the `.env` file securely and never commit it.
+- For production, consider setting up HTTPS with Let’s Encrypt (Certbot).
+
+---
+
+## 👨‍💻 Maintainer
+
+**Sazzad Hossain**  
+🔗 [GitHub: mshs013](https://github.com/mshs013)
