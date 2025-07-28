@@ -1,0 +1,145 @@
+<!-- core/templates/core/base.html -->
+ {% load static %}
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>{% block title %}{{ title }} | {{ ADMINLTE_SETTINGS.site_title }}{% endblock %}</title>
+        <!-- Google Font: Source Sans Pro -->
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
+        <!-- Font Awesome -->
+        <link rel="stylesheet" href="{% static 'adminlte/plugins/fontawesome-free/css/all.min.css' %}">
+        <!-- Theme switch -->
+        <link rel="stylesheet" href="{% static 'adminlte/dist/css/theme-switch.css' %}">
+        <!-- Theme style -->
+        <link rel="stylesheet" href="{% static 'adminlte/dist/css/adminlte.min.css' %}">
+        <!-- overlayScrollbars -->
+        <link rel="stylesheet" href="{% static 'adminlte/plugins/overlayScrollbars/css/OverlayScrollbars.min.css' %}">
+        <!-- Extra CSS -->
+        {% block extra_css %}{% endblock %}
+        <!-- custom CSS -->
+        <link rel="stylesheet" href="{% static 'adminlte/dist/css/custom.css' %}">
+        {% block extrahead %} {% endblock %}
+    </head>
+    <body class="hold-transition {% block bodyclass %}{% endblock %}">
+        <div class="wrapper">
+
+            <!-- Preloader -->
+            {% block preloader %}
+            <div class="preloader flex-column justify-content-center align-items-center">
+                <img class="animation__shake" src="{% static 'adminlte/dist/img/preloader-logo.png' %}" alt="OCMS Logo" height="152" width="87">
+            </div>
+            {% endblock %}
+
+            <!-- Navbar -->
+            {% block navbar %}
+            <nav class="main-header navbar navbar-expand navbar-light">
+                {% include 'core/navbar.html' %}
+            </nav>
+            {% endblock %}
+            
+            <!-- Sidebar -->
+            {% block sidebar %}
+            <aside class="main-sidebar sidebar-dark-primary elevation-4">
+                <!-- Brand Logo -->
+                <a href="{% url 'home' %}" class="brand-link">
+                    <img src="{% static 'adminlte/dist/img/preloader-logo.png' %}" alt="OCMS Logo" class="brand-image img-circle elevation-3" style="opacity: .8">
+                    <span class="brand-text font-weight-light">OCMS</span>
+                </a>
+                <!-- Sidebar content here -->
+                {% include 'core/sidebar-menu.html' %}
+            </aside>
+            {% endblock %}
+            
+            <!-- Content Wrapper -->
+            <div class="content-wrapper">
+                
+                <!-- Messages Block -->
+                {% block messages %}
+                    {% if messages %}
+                    <div class="container mt-3">
+                        {% for message in messages %}
+                            {% if message.tags == 'success' %}
+                                <div class="alert alert-success alert-dismissible">
+                                    <button type="button" class="close" data-dismiss="alert" aria-hidden="true">×</button>
+                                    <i class="icon fas fa-check"></i>{{ message|capfirst }}
+                                </div>
+                            {% elif message.tags == 'error' %}
+                                <div class="alert alert-danger alert-dismissible">
+                                    <button type="button" class="close" data-dismiss="alert" aria-hidden="true">×</button>
+                                    <i class="icon fas fa-ban"></i>{{ message|capfirst }}
+                                </div>
+                            {% elif message.tags == 'warning' %}
+                                <div class="alert alert-warning alert-dismissible">
+                                    <button type="button" class="close" data-dismiss="alert" aria-hidden="true">×</button>
+                                    <i class="icon fas fa-exclamation-triangle"></i>{{ message|capfirst }}
+                                </div>
+                            {% elif message.tags == 'info' %}
+                                <div class="alert alert-info alert-dismissible">
+                                    <button type="button" class="close" data-dismiss="alert" aria-hidden="true">×</button>
+                                    <i class="icon fas fa-info"></i>{{ message|capfirst }}
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                {% endblock messages %}
+
+                <!-- Header Content -->            
+                <section class="content-header">
+                    <div class="container-fluid">
+                        <div class="row mb-2">
+                            <div class="col-sm-6">
+                                <h1>{% block content_title %}{% endblock %}</h1>
+                            </div>
+                            <div class="col-sm-6">
+                                {% block page_actions %}{% endblock %}
+                            </div>
+                            
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- Main Content -->
+                <section class="content">
+                    {% block content %}
+                    <!-- Main page content here -->
+                    {% endblock %}
+                </section>
+            </div>
+
+            <!-- Control Sidebar -->
+            {% block control_sidebar %}
+            <aside class="control-sidebar control-sidebar-dark">
+                <!-- Control sidebar content goes here -->
+                {% include 'core/control-sidebar.html' %}
+            </aside>
+            {% endblock %}
+            <!-- /.control-sidebar -->
+            
+            <!-- Footer -->
+            {% block footer %}
+            <footer class="main-footer">
+                <!-- Footer content here -->
+                {% include 'core/footer.html' %}
+            </footer>
+            {% endblock %}
+        </div>
+
+        <!-- jQuery -->
+        <script src="{% static 'adminlte/plugins/jquery/jquery.min.js' %}"></script>
+        <!-- Bootstrap 4 -->
+        <script src="{% static 'adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+        <!-- AdminLTE App -->
+        <script src="{% static 'adminlte/dist/js/adminlte.js' %}"></script>
+        <!-- overlayScrollbars -->
+        <script src="{% static 'adminlte/plugins/overlayScrollbars/js/jquery.overlayScrollbars.min.js' %}"></script>
+        <!-- Include custom script to handle AdminLTE settings -->
+        {{ ADMINLTE_SETTINGS|json_script:"adminlte-settings" }}
+        <!-- Custom JS -->
+        <script src="{% static 'adminlte/dist/js/custom.js' %}"></script>
+        <!-- Extra JS -->
+        {% block extra_js %}{% endblock %}
+    </body>
+</html>

@@ -1,0 +1,35 @@
+{% load custom_filters %}
+{% if list_filter %}
+<div class="col-12 pb-2" id="change-list-filters">
+    <form id="changelist-search" class="form-inline" method="post">
+        {% csrf_token %}
+        {% for field, choices in filter_choices.items %}
+            <div class="form-group">
+                <select class="form-control select search-filter" name="{{ field }}" id="{{ field }}">
+                    <option value="">{{ field }}</option>
+                    <option value="">---------</option>
+                    {% for value, display in choices %}
+                        <option value="{{ value }}"  {% if value|stringformat:"s" == request.POST|get_item:field %}selected{% endif %}>
+                            {{ display }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+        {% endfor %}
+        <div class="form-group">
+            <input class="form-control" type="text" name="q" value="{{ request.POST.q }}" id="searchbar">
+        </div>
+        <div class="form-group" id="search_group">
+            <button type="submit" class="btn btn-primary">Search</button>
+            <input type="hidden" name="o" value="1">
+        </div>
+        <!-- Reset Filters -->
+        <span class="small quiet">
+            {% if request.POST %}
+                {{ total_count }} total
+                <a href="{% url view_url_name %}?">Reset filters</a>
+            {% endif %}
+        </span>
+    </form>
+</div>
+{% endif %}
