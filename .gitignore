@@ -1,13 +1,17 @@
-# Ignore pycache
+# Ignore all compiled Python files
 __pycache__/
-migrations/
+
+# Ignore all files inside any migrations/ folder
+**/migrations/*
+# But NOT __init__.py (negate the previous rule)
+!**/migrations/__init__.py
 
 # Ignore the virtual environment folder
 .venv/
 
-# Ignore static files folder
+# Ignore static files and cached menu
 staticfiles/
 menu_cache/
 
-# Ignore specific files
+# Ignore environment variable file
 .env
