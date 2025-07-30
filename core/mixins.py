@@ -58,3 +58,17 @@ class SoftDeleteModel(models.Model):
         self.deleted_at = None
         self.save()
         post_restore.send(sender=self.__class__, instance=self)
+
+class CreatedInfoModel(models.Model):
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, editable=False, related_name="%(class)s_created_by")
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
+
+    class Meta:
+        abstract = True
+
+class UpdatedInfoModel(models.Model):
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, editable=False, related_name="%(class)s_updated_by")
+    updated_at = models.DateTimeField(null=True, blank=True, editable=False)
+
+    class Meta:
+        abstract = True

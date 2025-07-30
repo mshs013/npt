@@ -1,17 +1,13 @@
 from django.db import models
 from django.conf import settings
-from core.mixins import SoftDeleteModel
-from django.utils import timezone
+from core.mixins import CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel
 
 User = settings.AUTH_USER_MODEL
 
-class NptReason(SoftDeleteModel):
+class NptReason(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
     name = models.CharField(max_length=100)
     min_time = models.PositiveIntegerField(default=1)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_by')
-    created_at = models.DateTimeField(default=timezone.now)
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null=True, related_name='updated_by')
-    updated_at = models.DateTimeField(blank=True, null=True)
+    remote_num = models.PositiveIntegerField(default=1, unique=True)
 
     class Meta: 
         verbose_name = "NPT Reason"
