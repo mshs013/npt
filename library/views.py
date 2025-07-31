@@ -2,7 +2,7 @@ from core.utils.views import dynamic_view, dynamic_form_view, dynamic_delete_vie
 
 # Create your views here.
 def reason(request):
-    list_display = ('name', 'min_time', 'remote_num', 'created_by', 'created_at', 'updated_by', 'updated_at',)
+    list_display = ('sl', 'name', 'min_time', 'remote_num', 'created_by', 'created_at', 'updated_by', 'updated_at',)
     default_sort = ['remote_num']  # Default sorting by name ascending and created_at descending
     list_filter = ('name', 'min_time', 'remote_num')  # Filters to include in the form
 
