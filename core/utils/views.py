@@ -451,10 +451,20 @@ def dynamic_trashed_view(request, app_name, model_name, context):
 
     # Prepare context
     context.update({
-        'object_list': [{
-            'fields': [(field, get_display_value(obj, field)) for field in list_display],
-            'pk': obj.pk
-        } for obj in object_list],
+        'object_list': [
+            {
+                'fields': [
+                    (
+                        field,
+                        i + 1 + (object_list.number - 1) * object_list.paginator.per_page  # For 'sl'
+                        if field == 'sl' else get_display_value(obj, field)
+                    )
+                    for field in list_display
+                ],
+                'pk': obj.pk
+            }
+            for i, obj in enumerate(object_list)
+        ],
         'headers': headers,
         'app_name': app_name,
         'model_name': model_name,

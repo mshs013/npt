@@ -22,7 +22,7 @@ def reasonDelete(request, pk):
     return dynamic_delete_view(request, 'library', 'NptReason', pk)
 
 def reasonTrashed(request):
-    list_display = ('name', 'min_time', 'remote_num', 'deleted_by', 'deleted_at',)
+    list_display = ('sl', 'name', 'min_time', 'remote_num', 'deleted_by', 'deleted_at',)
     default_sort = ['-deleted_at']  # Default sorting by name ascending and deleted_at descending
     list_filter = ('name', 'min_time', 'remote_num')  # Filters to include in the form
 
