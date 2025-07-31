@@ -58,31 +58,54 @@
                 <!-- Messages Block -->
                 {% block messages %}
                     {% if messages %}
-                    <div class="container mt-3">
+                    <div class="container js-alert-container">
                         {% for message in messages %}
                             {% if message.tags == 'success' %}
-                                <div class="alert alert-success alert-dismissible">
+                                <div class="alert alert-success alert-dismissible js-alert">
                                     <button type="button" class="close" data-dismiss="alert" aria-hidden="true">×</button>
                                     <i class="icon fas fa-check"></i>{{ message|capfirst }}
                                 </div>
                             {% elif message.tags == 'error' %}
-                                <div class="alert alert-danger alert-dismissible">
+                                <div class="alert alert-danger alert-dismissible js-alert">
                                     <button type="button" class="close" data-dismiss="alert" aria-hidden="true">×</button>
                                     <i class="icon fas fa-ban"></i>{{ message|capfirst }}
                                 </div>
                             {% elif message.tags == 'warning' %}
-                                <div class="alert alert-warning alert-dismissible">
+                                <div class="alert alert-warning alert-dismissible js-alert">
                                     <button type="button" class="close" data-dismiss="alert" aria-hidden="true">×</button>
                                     <i class="icon fas fa-exclamation-triangle"></i>{{ message|capfirst }}
                                 </div>
                             {% elif message.tags == 'info' %}
-                                <div class="alert alert-info alert-dismissible">
+                                <div class="alert alert-info alert-dismissible js-alert">
                                     <button type="button" class="close" data-dismiss="alert" aria-hidden="true">×</button>
                                     <i class="icon fas fa-info"></i>{{ message|capfirst }}
                                 </div>
                             {% endif %}
                         {% endfor %}
                     </div>
+
+                    <script type="text/javascript">
+                        // Auto-hide messages after 3 seconds
+                        setTimeout(function () {
+                            const alerts = document.querySelectorAll('.js-alert');
+                            const container = document.querySelector('.js-alert-container');
+                            let count = alerts.length;
+
+                            alerts.forEach(function (alert) {
+                                alert.classList.add('fade-out');
+
+                                setTimeout(() => {
+                                    alert.remove();
+                                    count--;
+
+                                    if (count === 0 && container) {
+                                        container.classList.add('fade-out');
+                                        setTimeout(() => container.remove(), 500);
+                                    }
+                                }, 500);
+                            });
+                        }, 3000);
+                    </script>
                     {% endif %}
                 {% endblock messages %}
 

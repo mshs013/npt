@@ -16,7 +16,32 @@
     line-height: 1.5; /* Adjust line height to match .form-control */
 }
 
-.company-name {
-	font-size: 2rem;
-	line-height: 1.3rem;
+.company-name { font-size: 2rem; line-height: 1.3rem; }
+
+.js-alert-container {
+    padding-top: 1rem; /* Same as pt-3 */
+    transition:
+        opacity 0.5s ease,
+        max-height 0.5s ease,
+        padding 0.5s ease,
+        margin 0.5s ease;
+    overflow: hidden;
+}
+
+.js-alert {
+    transition:
+        opacity 0.5s ease,
+        max-height 0.5s ease,
+        padding 0.5s ease,
+        margin 0.5s ease;
+    overflow: hidden;
+}
+
+.fade-out {
+    opacity: 0;
+    max-height: 0;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
 }
