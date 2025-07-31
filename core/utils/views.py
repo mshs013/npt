@@ -400,6 +400,7 @@ def dynamic_trashed_view(request, app_name, model_name, context):
 
     # Apply filters and sorting
     queryset = model.deleted_objects.filter(query_filters)
+    total_count = queryset.count()  # Get the total count for pagination
     if sort_field:
         queryset = queryset.order_by(f'-{sort_field}' if sort_order == 'desc' else sort_field)
     elif default_sort:

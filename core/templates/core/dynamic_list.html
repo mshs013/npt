@@ -13,7 +13,7 @@
             <a class="btn btn-success float-right" href="{% url add_url_name %}"><i class="fa fa-plus-circle"></i> Add {{ object_verbose_name }}</a>
         {% endif %}
         {% if can_trashed and trashed_url %}
-            <a class="btn btn-danger float-right" href="{% url trashed_url_name %}"><i class="fas fa-trash"></i> Trashed {{ object_verbose_name }}</a>
+            <a class="btn btn-danger float-right ml-2" href="{% url trashed_url_name %}"><i class="fas fa-trash"></i> Trashed {{ object_verbose_name }}</a>
         {% endif %}
     </div>
 {% endblock %}
