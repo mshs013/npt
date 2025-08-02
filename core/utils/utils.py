@@ -9,12 +9,14 @@ from django.core.exceptions import FieldDoesNotExist
 from django.apps import apps
 from django.db.models import Q, ForeignKey, CharField, ImageField, BooleanField, ManyToManyField, JSONField, DateTimeField, OneToOneRel, ManyToManyField, OneToOneField, ForeignKey
 from django.core.files.images import ImageFile
-from core.models import Profile
 from datetime import datetime
 from django.conf import settings
 import os
 
 QUOTE_MAP = {i: "_%02X" % i for i in b'":/_#?;@&=+$,"[]<>%\n\\'}
+
+def get_profile_model():
+    return apps.get_model('core', 'Profile')
 
 def paginate_queryset(request, queryset, per_page=10):
     """Paginate a queryset."""
@@ -252,6 +254,7 @@ def apply_filters(model, filters):
 
 def apply_search(model, search_query, search_fields):
     """Apply search to a queryset."""
+    Profile = get_profile_model()
     search_filters = Q()
     for field in search_fields:
         try:

@@ -1,6 +1,7 @@
 import os
 import sys
 from datetime import datetime
+
 from django.db.models.signals import (
     Signal, post_save, post_delete, pre_save, m2m_changed
 )
@@ -11,34 +12,36 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib.admin.models import LogEntry
 from django.conf import settings
 from django.db import connection
+from django.apps import apps
 
-from core.models import ActivityLog, User, Profile, Menu
 from core.utils.utils import get_client_ip, get_object_data
 from core.middleware import get_current_user
 
-# Custom signals for soft delete functionality
+# Custom signals for soft delete
 post_soft_delete = Signal()
 post_hard_delete = Signal()
 post_restore = Signal()
 
-# Directory to store cached menus
 MENU_CACHE_DIR = os.path.join(settings.BASE_DIR, 'menu_cache')
-if not os.path.exists(MENU_CACHE_DIR):
-    os.makedirs(MENU_CACHE_DIR)
+os.makedirs(MENU_CACHE_DIR, exist_ok=True)
 
-# Check if migrations are running
+def get_activity_log_model():
+    return apps.get_model('core', 'ActivityLog')
+
+def get_profile_model():
+    return apps.get_model('core', 'Profile')
+
 def is_migration_running():
     return 'makemigrations' in sys.argv or 'migrate' in sys.argv
 
-# Check if the ActivityLog table exists
 def activitylog_table_exists():
     try:
         return 'core_activitylog' in connection.introspection.table_names()
     except Exception:
         return False
 
-# Safe wrapper for ActivityLog creation
 def log_activity(**kwargs):
+    ActivityLog = get_activity_log_model()
     if activitylog_table_exists() and not is_migration_running():
         ActivityLog.objects.create(**kwargs)
 
@@ -56,6 +59,7 @@ def handle_post_restore(sender, instance, **kwargs):
 
 @receiver(pre_save)
 def capture_old_instance(sender, instance, **kwargs):
+    ActivityLog = get_activity_log_model()
     if sender in [ActivityLog, LogEntry, Session] or is_migration_running():
         return
     if instance.pk:
@@ -68,6 +72,7 @@ def capture_old_instance(sender, instance, **kwargs):
 
 @receiver(post_save)
 def log_model_save(sender, instance, created, **kwargs):
+    ActivityLog = get_activity_log_model()
     if sender in [ActivityLog, LogEntry, Session] or is_migration_running():
         return
 
@@ -92,20 +97,9 @@ def log_model_save(sender, instance, created, **kwargs):
         )
 
 @receiver(post_soft_delete)
-def log_model_soft_delete(sender, instance, **kwargs):
-    if sender in [ActivityLog, LogEntry, Session] or is_migration_running():
-        return
-
-    log_activity(
-        actor=get_current_user(),
-        action_type='DELETE',
-        data={'old': get_object_data(instance)},
-        content_type=ContentType.objects.get_for_model(sender),
-        object_id=str(instance.pk) if instance.pk else None,
-    )
-
 @receiver(post_delete)
 def log_model_delete(sender, instance, **kwargs):
+    ActivityLog = get_activity_log_model()
     if sender in [ActivityLog, LogEntry, Session] or is_migration_running():
         return
 
@@ -119,6 +113,7 @@ def log_model_delete(sender, instance, **kwargs):
 
 @receiver(post_restore)
 def log_model_restore(sender, instance, **kwargs):
+    ActivityLog = get_activity_log_model()
     if sender in [ActivityLog, LogEntry, Session] or is_migration_running():
         return
 
@@ -150,12 +145,14 @@ def log_user_login_failed(sender, credentials, request, **kwargs):
         remarks=f"Login Attempt Failed for email {email} with IP: {get_client_ip(request)}"
     )
 
-@receiver(post_save, sender=User)
+@receiver(post_save)
 def create_or_update_user_profile(sender, instance, created, **kwargs):
+    User = apps.get_model('core', 'User')
+    if sender != User:
+        return
+    Profile = get_profile_model()
     if created and not is_migration_running():
         Profile.objects.create(user=instance)
-
-# --- Menu cache handling ---
 
 def clear_user_menu_cache(user_id):
     menu_file_path = os.path.join(MENU_CACHE_DIR, f"menu_for_user_{user_id}.html")
@@ -163,19 +160,34 @@ def clear_user_menu_cache(user_id):
         os.remove(menu_file_path)
 
 def clear_all_user_menus_cache():
+    User = apps.get_model('core', 'User')
     for user in User.objects.all():
         clear_user_menu_cache(user.id)
 
-@receiver(m2m_changed, sender=User.user_permissions.through)
+@receiver(m2m_changed)
 def handle_user_permission_change(sender, instance, action, **kwargs):
+    User = apps.get_model('core', 'User')
+    if sender != User.user_permissions.through:
+        return
     if action in ['post_add', 'post_remove', 'post_clear']:
         clear_user_menu_cache(instance.id)
 
-@receiver(post_save, sender=User)
+@receiver(post_save)
 def handle_permission_change(sender, instance, **kwargs):
+    User = apps.get_model('core', 'User')
+    if sender != User:
+        return
     clear_user_menu_cache(instance.id)
 
-@receiver(post_save, sender=Menu)
 def handle_menu_update(sender, instance, **kwargs):
     if instance.pk:
         clear_all_user_menus_cache()
+
+def connect_signals():
+    User = apps.get_model('core', 'User')
+    Menu = apps.get_model('core', 'Menu')
+
+    post_save.connect(handle_permission_change, sender=User)
+    post_save.connect(create_or_update_user_profile, sender=User)
+    m2m_changed.connect(handle_user_permission_change, sender=User.user_permissions.through)
+    post_save.connect(handle_menu_update, sender=Menu)

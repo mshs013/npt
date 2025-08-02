@@ -9,6 +9,7 @@ from django.utils.html import mark_safe
 from django.urls import reverse
 from django.conf import settings
 from django.core.mail import send_mail
+from core.mixins import CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel
 
 from core.managers import UserManager
 User = settings.AUTH_USER_MODEL
@@ -113,10 +114,34 @@ class Menu(models.Model):
     def has_children(self):
         return self.children.exists()
 
+class Department(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
+    name = models.CharField(max_length=150)
+
+    class Meta: 
+        permissions = [
+            ("trashed_department", "Can view trashed Departments"),
+        ]
+
+    def __str__(self):
+        return self.name
+
+class Designation(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
+    name = models.CharField(max_length=150)
+
+    class Meta: 
+        permissions = [
+            ("trashed_designation", "Can view trashed Designations"),
+        ]
+
+    def __str__(self):
+        return self.name
+
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     official_id = models.CharField(max_length=10, null=True, blank=True)
     contact_no = models.CharField(max_length=15, null=True, blank=True)
+    department = models.OneToOneField(Department, on_delete=models.CASCADE, null=True, blank=True, related_name='department')
+    designation = models.OneToOneField(Designation, on_delete=models.CASCADE, null=True, blank=True, related_name='designation')
     user_img = models.ImageField(upload_to='user/img/', null=True, blank=True)
     user_sign = models.ImageField(upload_to='user/sign/', null=True, blank=True)
 

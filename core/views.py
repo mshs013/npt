@@ -49,9 +49,9 @@ def activitylogDetail(request, pk):
     return dynamic_detail_view(request, 'core', 'ActivityLog', pk)
 
 def user(request):
-    list_display = ('email', 'full_name', 'profile__user_img', 'is_superuser', 'is_staff', 'is_active', 'last_login')
+    list_display = ('email', 'full_name', 'profile__user_img', 'profile__department__name', 'profile__designation__name', 'is_superuser', 'is_staff', 'is_active', 'last_login')
     default_sort = ['email']  # Default sorting by name ascending and created_at descending
-    list_filter = ("first_name", "last_name", "is_staff", "is_active",)  # Filters to include in the form
+    list_filter = ("first_name", "last_name", 'profile__department', 'profile__designation', "is_staff", "is_active",)  # Filters to include in the form
 
     context = {
         'list_display': list_display,
@@ -68,7 +68,7 @@ def userForm(request, pk=None):
         'body_models': [
             {
                 'model_name': 'Profile',
-                'fields': ['official_id', 'contact_no', 'user_img', 'user_sign'],
+                'fields': ['official_id', 'contact_no', 'department', 'designation', 'user_img', 'user_sign'],
                 'fk_field': 'user',
             }
         ]
@@ -95,3 +95,75 @@ def userForm(request, pk=None):
 
 def userDelete(request, pk):
     return dynamic_delete_view(request, 'core', 'User', pk)
+
+def department(request):
+    list_display = ('sl', 'name', 'created_by', 'created_at', 'updated_by', 'updated_at',)
+    default_sort = ['name']  # Default sorting by name ascending and created_at descending
+    list_filter = ('name',)  # Filters to include in the form
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+    }
+    
+    return dynamic_view(request, 'core', 'Department', context)
+
+def departmentForm(request, pk=None):
+    fields = ('name',)  # Specify fields to include in the form
+    return dynamic_form_view(request, 'core', 'Department', pk, fields)
+
+def departmentDelete(request, pk):
+    return dynamic_delete_view(request, 'core', 'Department', pk)
+
+def departmentTrashed(request):
+    list_display = ('sl', 'name', 'deleted_by', 'deleted_at',)
+    default_sort = ['-deleted_at']  # Default sorting by name ascending and deleted_at descending
+    list_filter = ('name',)  # Filters to include in the form
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+    }
+    
+    return dynamic_trashed_view(request, 'core', 'Department', context)
+
+def departmentRestore(request, pk):
+    return dynamic_restore_view(request, 'core', 'Department', pk)
+
+def designation(request):
+    list_display = ('sl', 'name', 'created_by', 'created_at', 'updated_by', 'updated_at',)
+    default_sort = ['name']  # Default sorting by name ascending and created_at descending
+    list_filter = ('name',)  # Filters to include in the form
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+    }
+    
+    return dynamic_view(request, 'core', 'Designation', context)
+
+def designationForm(request, pk=None):
+    fields = ('name',)  # Specify fields to include in the form
+    return dynamic_form_view(request, 'core', 'Designation', pk, fields)
+
+def designationDelete(request, pk):
+    return dynamic_delete_view(request, 'core', 'Designation', pk)
+
+def designationTrashed(request):
+    list_display = ('sl', 'name', 'deleted_by', 'deleted_at',)
+    default_sort = ['-deleted_at']  # Default sorting by name ascending and deleted_at descending
+    list_filter = ('name',)  # Filters to include in the form
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+    }
+    
+    return dynamic_trashed_view(request, 'core', 'Designation', context)
+
+def designationRestore(request, pk):
+    return dynamic_restore_view(request, 'core', 'Designation', pk)

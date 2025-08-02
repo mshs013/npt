@@ -27,7 +27,7 @@ class UserAdmin(UserAdmin):
     inlines = (ProfileInline, )
     list_display_links = None
     list_display = ('email', 'get_name', 'image', 'is_superuser', 'is_staff', 'is_active', 'last_login', 'edit', 'delete')
-    list_filter = ("first_name", "last_name", "is_staff", "is_active",)
+    list_filter = ("first_name", "last_name", "profile__department", "profile__designation", "is_staff", "is_active",)
     list_select_related = ('profile', )
     fieldsets = (
         (None, {"fields": ("first_name", "last_name", "email", "password")}),
