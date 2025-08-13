@@ -39,6 +39,11 @@ class ProcessedNPT(models.Model):
     off_time = models.DateTimeField()
     on_time = models.DateTimeField(null=True, blank=True)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['mc_no', 'off_time'], name='unique_mc_off_time')
+        ]
+
     def get_duration(self):
         """
         Returns duration as timedelta:
@@ -57,3 +62,20 @@ class RotationStatus(models.Model):
     mc_no = models.CharField(max_length=50)
     count = models.IntegerField()
     count_time = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['mc_no', 'count_time'], name='unique_mc_count_time')
+        ]
+
+class ProcessorCursor(models.Model):
+    """
+    Stores the last processed timestamp for each Influx measurement
+    to prevent reprocessing the same records.
+    """
+    measurement = models.CharField(max_length=50, unique=True)
+    last_timestamp = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.measurement} → {self.last_timestamp}"
