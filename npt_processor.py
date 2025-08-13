@@ -22,10 +22,6 @@ django.setup()
 
 from library.models import ProcessedNPT, RotationStatus, NptReason, ProcessorCursor
 
-# -------------------- InfluxDB Setup --------------------
-client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
-query_api = client.query_api()
-
 # -------------------- Helpers --------------------
 def parse_ts(ts):
     """Parse ISO timestamps to datetime."""
@@ -35,7 +31,7 @@ def parse_ts(ts):
         return parser.isoparse(ts)
     except Exception as e:
         print_entry("WARN", f"Failed to parse timestamp {ts}: {e}")
-        return datetime.now()
+        return datetime.now(timezone.utc)
 
 def to_naive(dt):
     """Convert aware datetime to naive UTC if USE_TZ=False."""
@@ -60,14 +56,35 @@ def set_cursor(measurement, ts):
     obj.last_timestamp = ts
     obj.save()
 
+# -------------------- InfluxDB Setup --------------------
+def get_influx_client():
+    """Return InfluxDBClient if online, else None."""
+    try:
+        client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
+        health = client.health()
+        if health.status.lower() != "pass":
+            return None
+        return client
+    except Exception:
+        return None
+
+client = get_influx_client()
+if client:
+    query_api = client.query_api()
+else:
+    print("[WARN] InfluxDB offline. Skipping processing.")
+    exit(0)
+
 # -------------------- NPT Processing --------------------
 def process_npt():
     print_entry("INFO", "Starting NPT processing...")
 
     cursor_ts = get_cursor('npt')
+    start_range = cursor_ts.isoformat() if cursor_ts else "-1d"
+
     query = f'''
     from(bucket: "{INFLUX_BUCKET}")
-      |> range(start: -2m)
+      |> range(start: {start_range})
       |> filter(fn: (r) => r._measurement == "npt")
       |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
     '''
@@ -107,7 +124,7 @@ def process_npt():
             reason_id = None
         reason = reasons.get(reason_id)
 
-        if status.lower() == "off":
+        if status == "off":
             obj, created = ProcessedNPT.objects.get_or_create(
                 mc_no=mc_no,
                 off_time=ts,
@@ -115,7 +132,7 @@ def process_npt():
             )
             print_entry("NPT OFF", {"mc_no": mc_no, "ts": ts, "created": created})
 
-        elif status.lower() == "on":
+        elif status == "on":
             obj = ProcessedNPT.objects.filter(
                 mc_no=mc_no, on_time__isnull=True, off_time__lte=ts
             ).order_by("-off_time").first()
@@ -124,7 +141,7 @@ def process_npt():
                 obj.save()
                 print_entry("NPT ON", {"mc_no": mc_no, "ts": ts})
 
-        elif status.lower() == "btn":
+        elif status == "btn":
             obj = ProcessedNPT.objects.filter(
                 mc_no=mc_no, reason__isnull=True, off_time__lte=ts
             ).order_by("-off_time").first()
@@ -143,9 +160,11 @@ def process_rotation():
     print_entry("INFO", "Starting rotation processing...")
 
     cursor_ts = get_cursor('rotation')
+    start_range = cursor_ts.isoformat() if cursor_ts else "-1d"
+
     query = f'''
     from(bucket: "{INFLUX_BUCKET}")
-      |> range(start: -2m)
+      |> range(start: {start_range})
       |> filter(fn: (r) => r._measurement == "rotation")
       |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
     '''
