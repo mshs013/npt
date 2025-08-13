@@ -10,6 +10,7 @@ def reason(request):
         'list_display': list_display,
         'default_sort': default_sort,
         'list_filter': list_filter,
+        'per_page': 15,
     }
     
     return dynamic_view(request, 'library', 'NptReason', context)

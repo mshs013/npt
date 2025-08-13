@@ -119,6 +119,7 @@ def dynamic_view(request, app_name, model_name, context):
     default_sort = context.get('default_sort', [])
     list_filter = context.get('list_filter', [])
     title = context.get('title', model._meta.verbose_name)
+    per_page = context.get('per_page', 10)  # <-- page size from context, default 10
 
     # Get filter parameters and search query
     filters = {field: request.POST.get(field) for field in list_filter}
@@ -153,7 +154,7 @@ def dynamic_view(request, app_name, model_name, context):
         queryset = queryset.order_by(*default_sort)
 
     # Pagination
-    object_list, paginator = paginate_queryset(request, queryset)
+    object_list, paginator = paginate_queryset(request, queryset, per_page=per_page)
     
 
     url_remove = request.GET.urlencode().replace(f"sort={sort_field.lstrip('-')}&", "").replace(f"&order={sort_order}", "") if sort_field else ''
@@ -388,6 +389,7 @@ def dynamic_trashed_view(request, app_name, model_name, context):
     default_sort = context.get('default_sort', [])
     list_filter = context.get('list_filter', [])
     title = context.get('title', f"Trashed {model._meta.verbose_name}")
+    per_page = context.get('per_page', 10)  # <-- page size from context, default 10
 
     # Get filter parameters
     filters = {field: request.POST.get(field, None) for field in list_filter}
@@ -420,7 +422,7 @@ def dynamic_trashed_view(request, app_name, model_name, context):
         queryset = queryset.order_by(*default_sort)
 
     # Pagination
-    object_list, paginator = paginate_queryset(request, queryset)
+    object_list, paginator = paginate_queryset(request, queryset, per_page=per_page)
 
     # Prepare headers
     headers = []
