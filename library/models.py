@@ -2,7 +2,7 @@ from django.db import models
 from django.conf import settings
 from core.mixins import CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel
 from django.db.models import Q
-from datetime import datetime, timezone
+from datetime import datetime
 
 User = settings.AUTH_USER_MODEL
 
@@ -45,9 +45,10 @@ class ProcessedNPT(models.Model):
         - If on_time exists: on_time - off_time
         - Else: current time - off_time
         """
+        now = datetime.now()  # naive
         if self.on_time:
             return self.on_time - self.off_time
-        return datetime.now(timezone.utc) - self.off_time
+        return now - self.off_time
 
     def __str__(self):
         return f"{self.mc_no}"
