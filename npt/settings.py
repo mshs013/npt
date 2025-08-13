@@ -30,7 +30,7 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG')
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '192.168.0.114']
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '192.168.10.250', 'server.ocmsbd.com', 'npt.ocmsbd.com']
 
 
 # Application definition
@@ -51,7 +51,7 @@ INSTALLED_APPS = [
     'django_summernote',
     'django_extensions',
     'debug_toolbar',
-    #'reset_migrations',
+    'reset_migrations',
     #'django_truncate',
 
     'core',

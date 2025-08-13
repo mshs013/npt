@@ -36,3 +36,29 @@ def reasonTrashed(request):
 
 def reasonRestore(request, pk):
     return dynamic_restore_view(request, 'library', 'NptReason', pk)
+
+def npt(request):
+    list_display = ('sl', 'mc_no', 'reason', 'off_time', 'on_time', 'get_duration',)
+    default_sort = ['mc_no', '-on_time']  # Default sorting by name ascending and created_at descending
+    list_filter = ('mc_no', 'reason',)  # Filters to include in the form
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+    }
+    
+    return dynamic_view(request, 'library', 'ProcessedNPT', context)
+
+def rotation(request):
+    list_display = ('sl', 'mc_no', 'count', 'count_time',)
+    default_sort = ['mc_no', '-count_time']  # Default sorting by name ascending and created_at descending
+    list_filter = ('mc_no',)  # Filters to include in the form
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+    }
+    
+    return dynamic_view(request, 'library', 'RotationStatus', context)

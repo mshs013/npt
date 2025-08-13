@@ -9,7 +9,7 @@ from django.core.exceptions import FieldDoesNotExist
 from django.apps import apps
 from django.db.models import Q, ForeignKey, CharField, ImageField, BooleanField, ManyToManyField, JSONField, DateTimeField, OneToOneRel, ManyToManyField, OneToOneField, ForeignKey
 from django.core.files.images import ImageFile
-from datetime import datetime
+from datetime import datetime, timedelta
 from django.conf import settings
 import os
 
@@ -79,7 +79,7 @@ def get_special_fields():
     Returns:
         tuple: A tuple of field names to skip.
     """
-    return ('created_info', 'updated_info', 'deleted_info', 'actor', 'full_name')
+    return ('created_info', 'updated_info', 'deleted_info', 'actor', 'full_name', 'get_duration')
 
 def get_display_value(obj, field):
     """Get display value for a field, including composite fields and foreign keys."""
@@ -105,6 +105,8 @@ def get_display_value(obj, field):
                 return ''
         elif field == 'full_name':
            return obj.get_full_name()
+        elif field == 'get_duration':
+           return human_readable_time(obj.get_duration())
 
     
     # Retrieve the field object using get_field_object
@@ -501,3 +503,44 @@ def url_name_exists(url_name, **kwargs):
     except NoReverseMatch:
         # If the name does not exist or parameters are incorrect, NoReverseMatch is raised
         return False
+    
+
+def human_readable_time(value):
+    """
+    Convert a timedelta or string 'H:MM:SS.micro' into a human-readable string.
+    Examples:
+        0:00:46.060000 -> "46 sec"
+        0:03:15 -> "3 min 15 sec"
+        1:02:30 -> "1 hr 2 min 30 sec"
+    """
+    # Convert string to timedelta
+    if isinstance(value, str):
+        parts = value.split(":")
+        if len(parts) == 3:
+            h, m, s = parts
+            if "." in s:
+                s, micro = s.split(".")
+            else:
+                micro = 0
+            td = timedelta(hours=int(h), minutes=int(m), seconds=int(s), microseconds=int(micro))
+        else:
+            raise ValueError(f"Cannot parse time string: {value}")
+    elif isinstance(value, timedelta):
+        td = value
+    else:
+        raise TypeError("Value must be timedelta or string H:MM:SS.micro")
+
+    total_seconds = int(td.total_seconds())
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+
+    parts = []
+    if hours > 0:
+        parts.append(f"{hours} hr")
+    if minutes > 0:
+        parts.append(f"{minutes} min")
+    if seconds > 0 or (hours == 0 and minutes == 0):
+        parts.append(f"{seconds} sec")
+
+    return " ".join(parts)
