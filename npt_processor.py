@@ -107,7 +107,7 @@ def process_npt():
             reason_id = None
         reason = reasons.get(reason_id)
 
-        if status == "Off":
+        if status.lower() == "off":
             obj, created = ProcessedNPT.objects.get_or_create(
                 mc_no=mc_no,
                 off_time=ts,
@@ -115,7 +115,7 @@ def process_npt():
             )
             print_entry("NPT OFF", {"mc_no": mc_no, "ts": ts, "created": created})
 
-        elif status == "On":
+        elif status.lower() == "on":
             obj = ProcessedNPT.objects.filter(
                 mc_no=mc_no, on_time__isnull=True, off_time__lte=ts
             ).order_by("-off_time").first()
@@ -124,7 +124,7 @@ def process_npt():
                 obj.save()
                 print_entry("NPT ON", {"mc_no": mc_no, "ts": ts})
 
-        elif status == "Btn":
+        elif status.lower() == "btn":
             obj = ProcessedNPT.objects.filter(
                 mc_no=mc_no, reason__isnull=True, off_time__lte=ts
             ).order_by("-off_time").first()
