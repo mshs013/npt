@@ -3,6 +3,7 @@ import django
 from datetime import datetime, timezone
 from dateutil import parser
 from influxdb_client import InfluxDBClient
+from influxdb_client.client.exceptions import InfluxDBError
 from dotenv import load_dotenv
 
 # -------------------- Debug Setup --------------------
@@ -58,22 +59,26 @@ def set_cursor(measurement, ts):
 
 # -------------------- InfluxDB Setup --------------------
 def get_influx_client():
-    """Return InfluxDBClient if online, else None."""
     try:
         client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
         health = client.health()
         if health.status.lower() != "pass":
+            print("[WARN] InfluxDB health check failed")
             return None
         return client
-    except Exception:
+    except InfluxDBError as e:
+        print(f"[WARN] InfluxDB connection failed: {e}")
+        return None
+    except Exception as e:
+        print(f"[WARN] Unexpected InfluxDB error: {e}")
         return None
 
 client = get_influx_client()
-if client:
-    query_api = client.query_api()
-else:
-    print("[WARN] InfluxDB offline. Skipping processing.")
+if not client:
+    print("[WARN] InfluxDB offline. Exiting without processing.")
     exit(0)
+
+query_api = client.query_api()
 
 # -------------------- NPT Processing --------------------
 def process_npt():
