@@ -6,7 +6,7 @@ from django.db.models import Q
 User = settings.AUTH_USER_MODEL
 
 class NptReason(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=150)
     min_time = models.PositiveIntegerField(default=1)
     remote_num = models.PositiveIntegerField()
 
