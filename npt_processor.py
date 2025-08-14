@@ -85,7 +85,10 @@ def process_npt():
     print_entry("INFO", "Starting NPT processing...")
 
     cursor_ts = get_cursor('npt')
-    start_range = cursor_ts.isoformat() if cursor_ts else "-1d"
+    if cursor_ts:
+        start_range = f'"{cursor_ts.isoformat()}"'  # quotes for RFC3339
+    else:
+        start_range = "-1d"  # shorthand OK without quotes
 
     query = f'''
     from(bucket: "{INFLUX_BUCKET}")
@@ -165,7 +168,10 @@ def process_rotation():
     print_entry("INFO", "Starting rotation processing...")
 
     cursor_ts = get_cursor('rotation')
-    start_range = cursor_ts.isoformat() if cursor_ts else "-1d"
+    if cursor_ts:
+        start_range = f'"{cursor_ts.isoformat()}"'  # quotes for RFC3339
+    else:
+        start_range = "-1d"  # shorthand OK without quotes
 
     query = f'''
     from(bucket: "{INFLUX_BUCKET}")
