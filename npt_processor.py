@@ -103,9 +103,9 @@ def process_npt():
             if cursor_ts and ts <= cursor_ts:
                 continue
             npt_data.append({
-                "mc_no": record.get('mc_no'),
-                "status": record.get('status'),
-                "reason_id": record.get('btn'),
+                "mc_no": record.values.get('mc_no'),
+                "status": record.values.get('status'),
+                "reason_id": record.values.get('btn'),
                 "timestamp": ts
             })
 
@@ -180,7 +180,7 @@ def process_rotation():
         for record in table.records:
             if 'rotation' not in record.values or record['rotation'] is None:
                 continue
-            mc_no = record.get('mc_no')
+            mc_no = record.values.get('mc_no')
             ts = to_naive(parse_ts(record['_time']))
             if cursor_ts and ts <= cursor_ts:
                 continue
