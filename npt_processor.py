@@ -5,6 +5,7 @@ from dateutil import parser
 from influxdb_client import InfluxDBClient
 from influxdb_client.client.exceptions import InfluxDBError
 from dotenv import load_dotenv
+from zoneinfo import ZoneInfo
 
 # -------------------- Debug Setup --------------------
 DEBUG = True  # Set False to disable debug prints
@@ -16,6 +17,8 @@ INFLUX_URL = os.getenv("INFLUX_URL")
 INFLUX_TOKEN = os.getenv("INFLUX_TOKEN")
 INFLUX_ORG = os.getenv("INFLUX_ORG")
 INFLUX_BUCKET = os.getenv("INFLUX_BUCKET")
+
+LOCAL_TZ = ZoneInfo("Asia/Dhaka")  # Change to your desired timezone
 
 # -------------------- Django Setup --------------------
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'npt.settings')
@@ -34,13 +37,14 @@ def parse_ts(ts):
         print_entry("WARN", f"Failed to parse timestamp {ts}: {e}")
         return datetime.now(timezone.utc)
 
-def to_naive(dt):
-    """Convert aware datetime to naive UTC if USE_TZ=False."""
+def to_local(dt):
+    """Convert datetime from UTC to Asia/Dhaka and return naive (since USE_TZ=False)."""
     if dt is None:
         return None
-    if dt.tzinfo is not None:
-        return dt.astimezone(timezone.utc).replace(tzinfo=None)
-    return dt
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)  # Assume UTC if none
+    dt_local = dt.astimezone(LOCAL_TZ)        # Convert to Asia/Dhaka
+    return dt_local.replace(tzinfo=None)      # Drop tzinfo for naive datetime
 
 def print_entry(level, message):
     """Print messages depending on level and DEBUG flag."""
@@ -86,9 +90,11 @@ def process_npt():
 
     cursor_ts = get_cursor('npt')
     if cursor_ts:
-        start_range = f'"{cursor_ts.isoformat()}"'  # quotes for RFC3339
+        # Convert naive local cursor_ts to UTC for InfluxDB query
+        cursor_ts_utc = cursor_ts.replace(tzinfo=LOCAL_TZ).astimezone(timezone.utc)
+        start_range = f'time(v: "{cursor_ts_utc.isoformat()}")'  # no Z needed, isoformat includes offset
     else:
-        start_range = "-1d"  # shorthand OK without quotes
+        start_range = "-1d"
 
     query = f'''
     from(bucket: "{INFLUX_BUCKET}")
@@ -102,7 +108,7 @@ def process_npt():
     for table in tables:
         for record in table.records:
             raw_ts = record['_time']
-            ts = to_naive(parse_ts(raw_ts))
+            ts = to_local(parse_ts(raw_ts))
             if cursor_ts and ts <= cursor_ts:
                 continue
             npt_data.append({
@@ -169,9 +175,11 @@ def process_rotation():
 
     cursor_ts = get_cursor('rotation')
     if cursor_ts:
-        start_range = f'"{cursor_ts.isoformat()}"'  # quotes for RFC3339
+        # Convert naive local cursor_ts to UTC for InfluxDB query
+        cursor_ts_utc = cursor_ts.replace(tzinfo=LOCAL_TZ).astimezone(timezone.utc)
+        start_range = f'time(v: "{cursor_ts_utc.isoformat()}")'  # no Z needed, isoformat includes offset
     else:
-        start_range = "-1d"  # shorthand OK without quotes
+        start_range = "-1d"
 
     query = f'''
     from(bucket: "{INFLUX_BUCKET}")
@@ -187,7 +195,7 @@ def process_rotation():
             if 'rotation' not in record.values or record['rotation'] is None:
                 continue
             mc_no = record.values.get('mc_no')
-            ts = to_naive(parse_ts(record['_time']))
+            ts = to_local(parse_ts(record['_time']))
             if cursor_ts and ts <= cursor_ts:
                 continue
             count = int(record['rotation'])
