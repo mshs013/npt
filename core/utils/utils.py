@@ -217,39 +217,89 @@ def get_related_fields(model, list_display):
 
 
 def get_filter_choices(model, field_name):
-    """Return choices for a filter field, handling ForeignKey and regular fields."""
+    """
+    Return choices for a filter field, handling ForeignKey, related fields, and regular fields.
+    Supports 'profile__department_iexact' type filters.
+    """
+    # Strip optional lookup suffix (_icontains, _iexact, _exact)
+    if "_" in field_name and field_name.split("_")[-1] in (
+        "exact", "iexact", "contains", "icontains",
+        "in", "gt", "gte", "lt", "lte",
+        "startswith", "istartswith",
+        "endswith", "iendswith",
+        "range", "isnull", "regex", "iregex"
+    ):
+        *field_parts, _lookup = field_name.split("_")
+        field_name = "_".join(field_parts)
+
     try:
-        field = model._meta.get_field(field_name)
+        if "__" in field_name:  # related field
+            parts = field_name.split("__")
+            f_model = model
+            field = None
+            for part in parts:
+                f = f_model._meta.get_field(part)
+                if hasattr(f, "related_model"):
+                    f_model = f.related_model
+                    if f_model is None:
+                        return []  # Safely exit if related model is None
+            field = f  # final field
+        else:
+            field = model._meta.get_field(field_name)
     except FieldDoesNotExist:
         return []
 
-    # Handle ForeignKey fields
-    if isinstance(field, ForeignKey):
-        related_model = field.related_model
-        # Return a list of tuples with primary key and string representation
-        return [(obj.pk, str(obj)) for obj in related_model.objects.all()]
+    # ForeignKey or related field
+    if hasattr(field, "related_model") and field.related_model is not None:
+        return [(obj.pk, str(obj)) for obj in field.related_model.objects.all()]
 
-    # Handle fields with choices
-    if hasattr(field, 'choices') and field.choices:
+    # Fields with choices
+    if hasattr(field, "choices") and field.choices:
         return [(choice[0], choice[1]) for choice in field.choices]
 
-    # Handle CharField or TextField (custom value extraction)
+    # CharField / TextField
     if isinstance(field, CharField):
         return [(value, value) for value in model.objects.values_list(field_name, flat=True).distinct()]
 
     return []
 
 def apply_filters(model, filters):
-    """Apply filters to a queryset."""
+    """
+    Apply filters to a queryset.
+    `filters`: dict of {field_name: value}, field_name can have optional lookup like 'profile__department_iexact'
+    """
     query_filters = Q()
-    for field, value in filters.items():
+    for field_lookup, value in filters.items():
         if value:
+            # Split field and optional lookup
+            if "_" in field_lookup and field_lookup.split("_")[-1] in ("icontains", "iexact", "exact"):
+                *field_parts, lookup = field_lookup.split("_")
+                field = "_".join(field_parts)
+            else:
+                field = field_lookup
+                lookup = "icontains"  # default
+
             try:
-                field_instance = model._meta.get_field(field)
-                if isinstance(field_instance, ForeignKey):
-                    query_filters &= Q(**{f'{field}__id__exact': value})
+                # Check if it’s a related field
+                if "__" in field:
+                    parts = field.split("__")
+                    f_model = model
+                    for part in parts:
+                        f = f_model._meta.get_field(part)
+                        if hasattr(f, "related_model"):
+                            f_model = f.related_model
+                    field_instance = f
                 else:
-                    query_filters &= Q(**{f'{field}__icontains': value})
+                    field_instance = model._meta.get_field(field)
+
+                # Apply filter based on field type
+                if hasattr(field_instance, "related_model"):
+                    query_filters &= Q(**{f"{field}__id__exact": value})
+                elif isinstance(field_instance, CharField):
+                    query_filters &= Q(**{f"{field}__{lookup}": value})
+                else:
+                    query_filters &= Q(**{f"{field}": value})
+
             except FieldDoesNotExist:
                 pass
     return query_filters

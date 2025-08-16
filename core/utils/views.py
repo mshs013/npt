@@ -121,9 +121,15 @@ def dynamic_view(request, app_name, model_name, context):
     title = context.get('title', model._meta.verbose_name)
     per_page = context.get('per_page', 10)  # <-- page size from context, default 10
 
-    # Get filter parameters and search query
-    filters = {field: request.POST.get(field) for field in list_filter}
-    search_query = request.POST.get('q', '')
+    # Read submitted filter values from POST and keep only non-empty ones
+    submitted_filters = {
+        field: request.POST.get(field, "").strip()
+        for field in list_filter
+        if request.POST.get(field, "").strip() != ""
+    }
+
+    # Read search box value
+    search_query = request.POST.get('q', '').strip()
 
     # Get sorting parameters
     sort_field = request.GET.get('sort')
@@ -132,7 +138,7 @@ def dynamic_view(request, app_name, model_name, context):
     sort_field = sort_field if sort_field in valid_fields else None
 
     # Apply filters and search
-    query_filters = apply_filters(model, filters)
+    query_filters = apply_filters(model, submitted_filters)
     if search_query:
         search_fields = list_filter
         query_filters &= apply_search(model, search_query, search_fields)
@@ -220,7 +226,8 @@ def dynamic_view(request, app_name, model_name, context):
         'model_name': model_name,
         'object_verbose_name_plural': model._meta.verbose_name_plural,
         'object_verbose_name': model._meta.verbose_name,
-        'filters': request.POST,
+        'filters': submitted_filters,
+        'search_query': search_query,
         'total_count': total_count,
         'page_obj': object_list,
         'opts': model._meta,

@@ -7,10 +7,6 @@ def dashboard(request):
     context = { 'title' : 'Dashboard' }
     return render(request, 'core/dashboard.html', context)
 
-def camera_stream(request):
-    context = { 'title' : 'Live Stream' }
-    return render(request, 'core/camera.html', context)
-
 def menu(request):
     list_display = ('name', 'parent', 'url', 'order', 'permission')
     default_sort = ['-parent', 'order']  # Default sorting by name ascending and created_at descending
@@ -49,7 +45,7 @@ def activitylogDetail(request, pk):
     return dynamic_detail_view(request, 'core', 'ActivityLog', pk)
 
 def user(request):
-    list_display = ('email', 'full_name', 'profile__user_img', 'profile__department__name', 'profile__designation__name', 'is_superuser', 'is_staff', 'is_active', 'last_login')
+    list_display = ('email', 'full_name', 'profile__user_img', 'profile__department', 'profile__designation', 'is_superuser', 'is_staff', 'is_active', 'last_login')
     default_sort = ['email']  # Default sorting by name ascending and created_at descending
     list_filter = ("first_name", "last_name", 'profile__department', 'profile__designation', "is_staff", "is_active",)  # Filters to include in the form
 

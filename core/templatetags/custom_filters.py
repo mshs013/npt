@@ -1,6 +1,7 @@
 from django import template
 from django.utils.timezone import now
 from core.utils.utils import get_filter_choices, get_model
+from string import capwords
 import datetime
 import os
 
@@ -12,34 +13,78 @@ def get_key(value, arg):
     return value.get(arg, '')
 
 @register.filter
-def humanize_field_name(field_name):
-    """Converts field names like 'created_at' to 'Created At'."""
-    return field_name.replace('_', ' ').title()
+def humanize_field_name(value):
+    """
+    Converts a field name to human-readable form.
+
+    Handles:
+        - Underscores -> spaces
+        - Related fields (e.g., profile__department)
+        - Django lookup suffixes (e.g., _iexact, _icontains)
+
+    Examples:
+        'profile__department_iexact' -> 'Department'
+        'profile__department'         -> 'Department'
+        'department_iexact'           -> 'Department'
+        'department'                  -> 'Department'
+        'created_at'                  -> 'Created At'
+    """
+    if not value:
+        return ""
+
+    # Define common Django lookup suffixes
+    lookup_suffixes = (
+        "_exact", "_iexact", "_contains", "_icontains",
+        "_in", "_gt", "_gte", "_lt", "_lte",
+        "_startswith", "_istartswith",
+        "_endswith", "_iendswith",
+        "_range", "_isnull", "_regex", "_iregex"
+    )
+
+    # Remove any lookup suffix
+    for suffix in lookup_suffixes:
+        if value.endswith(suffix):
+            value = value[: -len(suffix)]
+            break  # only remove one suffix
+
+    # Take the last part after '__' for related fields
+    simple_name = value.split("__")[-1]
+
+    # Replace underscores with spaces and capitalize words
+    return capwords(simple_name.replace("_", " "))
 
 @register.filter
-def get_item(dictionary, key):
-    return dictionary.get(key)
+def get_item(d, key):
+    if not isinstance(d, dict):
+        return ""
+    return d.get(key, "")
 
 @register.inclusion_tag('core/filter_form.html', takes_context=True)
 def render_filter_block(context, app_name, model_name, list_filter):
-    """Render the filter block dynamically."""
+    """Render the filter block dynamically with selected filter values."""
     request = context['request']
     model = get_model(app_name, model_name)
     filter_choices = {field: get_filter_choices(model, field) for field in list_filter}
+
+    # Use filters and search_query from the view context if available
+    filters = context.get('filters', {})         # <-- added
+    search_query = context.get('search_query', '')  # <-- added
 
     # Calculate total_count based on the queryset
     queryset = model.objects.all()  # Adjust this if you have specific queryset logic
     total_count = queryset.count()
 
     # Prepare the reset filters URL
-    view_url_name = f'view_{model_name.lower()}'  # Adjust as needed for your URL naming convention
+    view_url_name = f'view_{model_name.lower()}'
 
     return {
         'request': request,
         'filter_choices': filter_choices,
         'list_filter': list_filter,
-        'total_count':total_count,
-        'view_url_name':view_url_name,
+        'total_count': total_count,
+        'view_url_name': view_url_name,
+        'filters': filters,               # <-- pass to template
+        'search_query': search_query,     # <-- pass to template
     }
 
 @register.filter
@@ -82,10 +127,6 @@ def truncate_filename(value, length=15):
         name, ext = os.path.splitext(os.path.basename(value))
         return f"{name[:length-len(ext)-3]}...{ext}"
     return os.path.basename(value)
-
-@register.filter
-def get_item(dictionary, key):
-    return dictionary.get(key) > 0
 
 @register.filter
 def as_crispy_field(field):
