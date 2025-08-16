@@ -269,39 +269,48 @@ def apply_filters(model, filters):
     `filters`: dict of {field_name: value}, field_name can have optional lookup like 'profile__department_iexact'
     """
     query_filters = Q()
+
     for field_lookup, value in filters.items():
-        if value:
-            # Split field and optional lookup
-            if "_" in field_lookup and field_lookup.split("_")[-1] in ("icontains", "iexact", "exact"):
-                *field_parts, lookup = field_lookup.split("_")
-                field = "_".join(field_parts)
+        if not value:
+            continue
+
+        # Split field and optional lookup
+        if "_" in field_lookup and field_lookup.split("_")[-1] in (
+            "icontains", "iexact", "exact",
+            "gt", "gte", "lt", "lte",
+            "startswith", "istartswith",
+            "endswith", "iendswith",
+            "in", "range", "isnull", "regex", "iregex"
+        ):
+            *field_parts, lookup = field_lookup.split("_")
+            field = "_".join(field_parts)
+        else:
+            field = field_lookup
+            lookup = "icontains"  # default
+
+        try:
+            # Resolve the final field instance (including related fields)
+            parts = field.split("__")
+            f_model = model
+            for part in parts:
+                f = f_model._meta.get_field(part)
+                if hasattr(f, "related_model"):
+                    f_model = f.related_model
+            field_instance = f
+
+            # Apply filter correctly based on field type
+            if isinstance(field_instance, (ForeignKey, OneToOneField)):
+                # Use field__id for exact match only
+                query_filters &= Q(**{f"{field}__id": value})
+            elif isinstance(field_instance, CharField):
+                query_filters &= Q(**{f"{field}__{lookup}": value})
             else:
-                field = field_lookup
-                lookup = "icontains"  # default
+                # Other fields: just use exact match
+                query_filters &= Q(**{f"{field}": value})
 
-            try:
-                # Check if it’s a related field
-                if "__" in field:
-                    parts = field.split("__")
-                    f_model = model
-                    for part in parts:
-                        f = f_model._meta.get_field(part)
-                        if hasattr(f, "related_model"):
-                            f_model = f.related_model
-                    field_instance = f
-                else:
-                    field_instance = model._meta.get_field(field)
+        except FieldDoesNotExist:
+            pass
 
-                # Apply filter based on field type
-                if hasattr(field_instance, "related_model"):
-                    query_filters &= Q(**{f"{field}__id__exact": value})
-                elif isinstance(field_instance, CharField):
-                    query_filters &= Q(**{f"{field}__{lookup}": value})
-                else:
-                    query_filters &= Q(**{f"{field}": value})
-
-            except FieldDoesNotExist:
-                pass
     return query_filters
 
 def apply_search(model, search_query, search_fields):
