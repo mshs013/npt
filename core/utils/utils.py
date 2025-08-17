@@ -114,6 +114,10 @@ def get_display_value(obj, field):
     
     if not field_object:
         return ''
+
+    # Handle ChoiceField / fields with choices
+    if hasattr(obj, f'get_{field}_display'):
+        return getattr(obj, f'get_{field}_display')()
         
     # Handle field types based on the retrieved field object
     if isinstance(field_object, ImageField):

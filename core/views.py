@@ -8,9 +8,9 @@ def dashboard(request):
     return render(request, 'core/dashboard.html', context)
 
 def menu(request):
-    list_display = ('name', 'parent', 'url', 'order', 'permission')
+    list_display = ('name', 'parent', 'url', 'order', 'permission',)
     default_sort = ['-parent', 'order']  # Default sorting by name ascending and created_at descending
-    list_filter = ('name', 'url')  # Filters to include in the form
+    list_filter = ('name', 'parent', 'url',)  # Filters to include in the form
 
     context = {
         'list_display': list_display,
