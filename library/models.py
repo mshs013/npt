@@ -79,3 +79,49 @@ class ProcessorCursor(models.Model):
 
     def __str__(self):
         return f"{self.measurement} → {self.last_timestamp}"
+    
+class Company(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
+    name = models.CharField(max_length=150, unique=True)
+
+    def __str__(self):
+        return f"{self.name}"
+    
+class Building(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
+    name = models.CharField(max_length=150, unique=True)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="building_company")
+
+    def __str__(self):
+        return f"{self.name}"
+    
+class Floor(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
+    name = models.CharField(max_length=150, unique=True)
+    building = models.ForeignKey(Building, on_delete=models.CASCADE, related_name="floor_building")
+
+    def __str__(self):
+        return f"{self.name}"
+    
+class Block(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
+    name = models.CharField(max_length=150, unique=True)
+    floor = models.ForeignKey(Floor, on_delete=models.CASCADE, related_name="block_floor")
+
+    def __str__(self):
+        return f"{self.name}"
+    
+class MachineType(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
+    name = models.CharField(max_length=150, unique=True)
+
+    class Meta: 
+        verbose_name = "Machine Type"
+        verbose_name_plural = "Machine Types"
+
+    def __str__(self):
+        return f"{self.name}"
+    
+class Shift(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
+    name = models.CharField(max_length=150, unique=True)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="shift_company")
+
+    def __str__(self):
+        return f"{self.name}"

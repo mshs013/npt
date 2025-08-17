@@ -3,12 +3,13 @@ from django.urls import reverse
 from django import forms
 from django.utils import timezone
 from django.contrib import messages
-from django.db import models
 from django.db.models.signals import post_save
 from core.utils.utils import get_related_objects, get_model, apply_filters, paginate_queryset, get_display_value, apply_search, url_name_exists, get_simplified_field_name, get_related_fields
 from core.forms import generate_dynamic_formset
 from core.models import User
 from core.signals import create_or_update_user_profile
+from crispy_forms.helper import FormHelper
+from crispy_forms.layout import Layout, Field, Div, HTML
 
 def dynamic_multiform_view(request, app_label, head_model_name, pk=None, model_configs=None, hide_fields=None, readonly_fields=None, widget_overrides=None, is_form_row=True, extra_form=1):
     """
@@ -252,7 +253,6 @@ def dynamic_view(request, app_name, model_name, context):
     return render(request, 'core/dynamic_list.html', context)
 
 
-
 def dynamic_form_view(request, app_name, model_name, pk=None, fields=None, widget_overrides=None):
     """Dynamic form view (add or edit) with customizable fields."""
     model = get_model(app_name, model_name)
@@ -266,6 +266,17 @@ def dynamic_form_view(request, app_name, model_name, pk=None, fields=None, widge
         title = 'Create ' + model._meta.verbose_name
 
     form = form_class(request.POST or None, request.FILES or None, instance=instance)
+
+    # Add classes for date/time/datetime pickers
+    for field_name, field in form.fields.items():
+        if isinstance(field, forms.DateField):
+            field.widget.attrs.update({'class': 'form-control datepicker', 'autocomplete': 'off'})
+        elif isinstance(field, forms.TimeField):
+            field.widget.attrs.update({'class': 'form-control timepicker', 'autocomplete': 'off'})
+        elif isinstance(field, forms.DateTimeField):
+            field.widget.attrs.update({'class': 'form-control datetimepicker', 'autocomplete': 'off'})
+        else:
+            field.widget.attrs.update({'class': 'form-control'})
 
     # Apply widget overrides
     if widget_overrides:

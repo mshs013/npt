@@ -1,0 +1,51 @@
+<!-- core/templates/core/dashboard.html -->
+{% extends "core/base.html" %}
+
+{% block content_title %}Dashboard{% endblock %}
+
+{% block content_breadcrumb %}
+    <li class="breadcrumb-item"><a href="#">Home</a></li>
+    <li class="breadcrumb-item active">Machine Log</li>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Default Card Example</h3>
+        <!-- /.card-tools -->
+    </div>
+    <!-- /.card-header -->
+    <div class="card-body">
+        <table id="result_list" class="table table-sm table-striped">
+            <thead>
+                <tr>
+                    <th>SL</th>
+                    <th>Machine No</th>
+                    <th>Off Time</th>
+                    <th>On Time</th>
+                    <th>Reason</th>
+                    <th>Duration</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for obj in mcLogs %}
+                <tr role="row">
+                    <td>{{ obj.pk }}</td>
+                    <td>{{ obj.mc_no }}</td>
+                    <td>{{ obj.off_time }}</td>
+                    <td>{{ obj.on_time }}</td>
+                    <td>{{ obj.reason.name }}</td>
+                    <td>{{ obj.get_duration }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <!-- /.card-body -->
+    <div class="card-footer">
+        The footer of the card
+    </div>
+    <!-- /.card-footer -->
+</div>
+<!-- /.card -->  
+{% endblock %}

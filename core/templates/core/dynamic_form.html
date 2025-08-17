@@ -5,6 +5,7 @@
     {{  block.super }}
     <link rel="stylesheet" href="{% static 'adminlte/plugins/select2/css/select2.min.css' %}">
     <link rel="stylesheet" href="{% static 'adminlte/plugins/select2-bootstrap4-theme/select2-bootstrap4.min.css' %}">
+    <link rel="stylesheet" href="{% static 'adminlte/plugins/tempusdominus-bootstrap-4/css/tempusdominus-bootstrap-4.min.css' %}">
 {% endblock %}
 
 {% block content_title %}
@@ -35,11 +36,53 @@
 
 {% block extra_js %}
     {{  block.super }}
-    <script type="text/javascript" src="{% static 'vendor/select2/js/select2.min.js' %}"></script>
-    <script>
-        $(document).ready(function () {
+    <script type="text/javascript" src="{% static 'adminlte/plugins/moment/moment.min.js' %}"></script>
+    <script type="text/javascript" src="{% static 'adminlte/plugins/tempusdominus-bootstrap-4/js/tempusdominus-bootstrap-4.min.js' %}"></script>
+    <script type="text/javascript" src="{% static 'adminlte/plugins/select2/js/select2.min.js' %}"></script>
+    <script type="text/javascript">
+    $(document).ready(function () {
         // Allow for styling of selects
         $('.select').addClass('form-control').select2({ theme: 'bootstrap4', width: 'element' });
+        function wrapAndInit(inputClass, format, iconClass) {
+            $(inputClass).each(function () {
+                var $input = $(this);
+                var id = $input.attr('id');
+                if (!id) return;
+
+                // Only wrap if not wrapped
+                if (!$input.parent().hasClass('input-group')) {
+                    $input.wrap('<div class="input-group date" id="' + id + '_wrapper" data-target-input="nearest"></div>');
+                    $input.addClass('datetimepicker-input');
+                    $input.attr('data-target', '#' + id + '_wrapper');
+                    $input.after('<div class="input-group-append" data-target="#' + id + '_wrapper" data-toggle="datetimepicker"><div class="input-group-text"><i class="' + iconClass + '"></i></div></div>');
+                }
+
+                var $wrapper = $input.parent();
+
+                // Initialize if not already
+                if (!$wrapper.data('datetimepicker')) {
+                    $wrapper.datetimepicker({
+                        format: format,
+                        allowInputToggle: true, // input click also opens picker
+                        icons: {
+                            time: 'far fa-clock',
+                            date: 'far fa-calendar',
+                            up: 'fas fa-arrow-up',
+                            down: 'fas fa-arrow-down',
+                            previous: 'fas fa-chevron-left',
+                            next: 'fas fa-chevron-right',
+                            today: 'far fa-calendar-check',
+                            clear: 'far fa-trash-alt',
+                            close: 'far fa-times-circle'
+                        }
+                    });
+                }
+            });
+        }
+
+        wrapAndInit('.datepicker', 'YYYY-MM-DD', 'fa fa-calendar');
+        wrapAndInit('.timepicker', 'HH:mm:ss', 'fa fa-clock');
+        wrapAndInit('.datetimepicker', 'YYYY-MM-DD HH:mm:ss', 'fa fa-calendar-alt');
     });
     </script>
 {% endblock %}

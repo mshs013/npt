@@ -9,7 +9,7 @@ from django.core.exceptions import FieldDoesNotExist
 from django.apps import apps
 from django.db.models import Q, ForeignKey, CharField, ImageField, BooleanField, ManyToManyField, JSONField, DateTimeField, OneToOneRel, ManyToManyField, OneToOneField, ForeignKey
 from django.core.files.images import ImageFile
-from datetime import datetime, timedelta
+from datetime import datetime, date, time, timedelta
 from django.conf import settings
 import os
 
@@ -514,6 +514,10 @@ def get_object_data(instance):
         if field.concrete and not isinstance(field, (ForeignKey, OneToOneField, ManyToManyField)):
             if isinstance(value, datetime):
                 value = value.strftime("%d-%b-%Y %I:%M:%S %p")  # Format datetime as specified
+            elif isinstance(value, date):
+                value = value.strftime("%d-%b-%Y")  # Format date
+            elif isinstance(value, time):
+                value = value.strftime("%I:%M:%S %p")  # Format time
             elif isinstance(value, ImageFile):
                 value = f'<img src="{value.url}" alt="{field.name}">' if value else ''  # Return img tag for image fields
             data[field.name] = value
