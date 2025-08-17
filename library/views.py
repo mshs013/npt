@@ -1,6 +1,5 @@
 from core.utils.views import dynamic_view, dynamic_form_view, dynamic_delete_view, dynamic_trashed_view, dynamic_restore_view
-from library.models import ProcessedNPT
-from django.shortcuts import render
+from django.forms.widgets import CheckboxSelectMultiple
 
 # Create your views here.
 def reason(request):
@@ -287,3 +286,44 @@ def shiftTrashed(request):
 
 def shiftRestore(request, pk):
     return dynamic_restore_view(request, 'library', 'Shift', pk)
+
+
+def machines(request):
+    list_display = ('sl', 'mc_no', 'brand', 'model', 'category', 'block', 'created_by', 'created_at', 'updated_by', 'updated_at',)
+    default_sort = ['mc_no']  
+    list_filter = ('mc_no', 'brand', 'model', 'category', 'block',)  
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+        'per_page': 15,
+    }
+    
+    return dynamic_view(request, 'library', 'Machines', context)
+
+def machinesForm(request, pk=None):
+    fields = ('mc_no', 'device_mc', 'brand', 'model', 'category', 'dia', 'feeder', 'shinker', 'track', 'max_rpm', 'gg', 'speed_factor', 'extra_cylinder', 'lycra_attach', 'block', 'mc_types',)  # Specify fields to include in the form
+    widget_overrides = {
+        'mc_types': CheckboxSelectMultiple,
+    }
+    return dynamic_form_view(request, 'library', 'Machines', pk, fields, widget_overrides)
+
+def machinesDelete(request, pk):
+    return dynamic_delete_view(request, 'library', 'Machines', pk)
+
+def machinesTrashed(request):
+    list_display = ('sl', 'mc_no', 'brand', 'model', 'category', 'block', 'deleted_by', 'deleted_at',)
+    default_sort = ['-deleted_at']  
+    list_filter = ('mc_no', 'brand', 'model', 'category', 'block',)  
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+    }
+    
+    return dynamic_trashed_view(request, 'library', 'Machines', context)
+
+def machinesRestore(request, pk):
+    return dynamic_restore_view(request, 'library', 'Machines', pk)

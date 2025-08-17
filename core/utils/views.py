@@ -316,6 +316,9 @@ def dynamic_form_view(request, app_name, model_name, pk=None, fields=None, widge
                     
             instance.save()
 
+            # Save ManyToMany fields (like mc_types)
+            form.save_m2m()
+
             # Add a specific flash message based on whether the instance is new or being updated
             if pk:
                 messages.success(request, f'{model._meta.verbose_name} was updated successfully.')

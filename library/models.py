@@ -3,6 +3,7 @@ from django.conf import settings
 from core.mixins import CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel
 from django.db.models import Q
 from datetime import datetime
+from core.fields import MACAddressField
 
 User = settings.AUTH_USER_MODEL
 
@@ -125,3 +126,33 @@ class Shift(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
 
     def __str__(self):
         return f"{self.name}"
+
+class Machines(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
+    MC_CATEGORY = [
+        ('C', 'Circular'),
+        ('F', 'Flat'),
+    ]
+
+    mc_no = models.CharField(max_length=50, unique=True)
+    device_mc = MACAddressField(null=True, blank=True)
+    brand = models.CharField(max_length=100)
+    model = models.CharField(max_length=100)
+    category = models.CharField(max_length=1, choices=MC_CATEGORY, default="C")
+    dia = models.IntegerField(null=True, blank=True)
+    feeder = models.IntegerField(null=True, blank=True)
+    shinker = models.IntegerField(null=True, blank=True)
+    track = models.IntegerField(null=True, blank=True)
+    max_rpm = models.IntegerField(null=True, blank=True)
+    gg = models.IntegerField(null=True, blank=True)
+    speed_factor = models.IntegerField(null=True, blank=True)
+    extra_cylinder = models.BooleanField(default=False)
+    lycra_attach = models.BooleanField(default=False)
+    block = models.ForeignKey(Block, on_delete=models.SET_NULL, null=True, blank=True)
+    mc_types = models.ManyToManyField(MachineType, related_name="machines", blank=True)
+
+    class Meta:
+        verbose_name = 'Machine'
+        verbose_name_plural = 'Machines'
+
+    def __str__(self):
+        return f"{self.brand} - {self.model} - {self.mc_no}"

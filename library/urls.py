@@ -11,6 +11,7 @@ urlpatterns = [
     path('npt/', views.npt, name='view_processednpt'),
     path('rotation/', views.rotation, name='view_rotationstatus'),
 
+    ### Company
     path('company/', views.company, name='view_company'),
     path('company/add/', views.companyForm, name='add_company'),
     path('company/<int:pk>/change/', views.companyForm, name='change_company'),
@@ -18,6 +19,7 @@ urlpatterns = [
     path('company/trashed/', views.companyTrashed, name='trashed_company'),
     path('company/<int:pk>/restore/', views.companyRestore, name='restore_company'),
 
+    ### Building
     path('building/', views.building, name='view_building'),
     path('building/add/', views.buildingForm, name='add_building'),
     path('building/<int:pk>/change/', views.buildingForm, name='change_building'),
@@ -25,6 +27,7 @@ urlpatterns = [
     path('building/trashed/', views.buildingTrashed, name='trashed_building'),
     path('building/<int:pk>/restore/', views.buildingRestore, name='restore_building'),
 
+    ### Floor
     path('floor/', views.floor, name='view_floor'),
     path('floor/add/', views.floorForm, name='add_floor'),
     path('floor/<int:pk>/change/', views.floorForm, name='change_floor'),
@@ -32,6 +35,7 @@ urlpatterns = [
     path('floor/trashed/', views.floorTrashed, name='trashed_floor'),
     path('floor/<int:pk>/restore/', views.floorRestore, name='restore_floor'),
 
+    ### Block
     path('block/', views.block, name='view_block'),
     path('block/add/', views.blockForm, name='add_block'),
     path('block/<int:pk>/change/', views.blockForm, name='change_block'),
@@ -39,6 +43,7 @@ urlpatterns = [
     path('block/trashed/', views.blockTrashed, name='trashed_block'),
     path('block/<int:pk>/restore/', views.blockRestore, name='restore_block'),
 
+    ### Machine Type
     path('machinetype/', views.machinetype, name='view_machinetype'),
     path('machinetype/add/', views.machinetypeForm, name='add_machinetype'),
     path('machinetype/<int:pk>/change/', views.machinetypeForm, name='change_machinetype'),
@@ -46,10 +51,19 @@ urlpatterns = [
     path('machinetype/trashed/', views.machinetypeTrashed, name='trashed_machinetype'),
     path('machinetype/<int:pk>/restore/', views.machinetypeRestore, name='restore_machinetype'),
 
+    ### Shift
     path('shift/', views.shift, name='view_shift'),
     path('shift/add/', views.shiftForm, name='add_shift'),
     path('shift/<int:pk>/change/', views.shiftForm, name='change_shift'),
     path('shift/<int:pk>/delete/', views.shiftDelete, name='delete_shift'),
     path('shift/trashed/', views.shiftTrashed, name='trashed_shift'),
     path('shift/<int:pk>/restore/', views.shiftRestore, name='restore_shift'),
+
+    ### machines ###
+    path('machines/', views.machines, name='view_machines'),
+    path('machines/add/', views.machinesForm, name='add_machines'),
+    path('machines/<int:pk>/change/', views.machinesForm, name='change_machines'),
+    path('machines/<int:pk>/delete/', views.machinesDelete, name='delete_machines'),
+    path('machines/trashed/', views.machinesTrashed, name='trashed_machines'),
+    path('machines/<int:pk>/restore/', views.machinesRestore, name='restore_machines'),
 ]
