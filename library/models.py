@@ -41,6 +41,8 @@ class ProcessedNPT(models.Model):
     on_time = models.DateTimeField(null=True, blank=True)
 
     class Meta:
+        verbose_name = "Processed NPT"
+        verbose_name_plural = "Processed NPT"
         constraints = [
             models.UniqueConstraint(fields=['mc_no', 'off_time'], name='unique_mc_off_time')
         ]
@@ -65,6 +67,8 @@ class RotationStatus(models.Model):
     count_time = models.DateTimeField()
 
     class Meta:
+        verbose_name = "Rotation Status"
+        verbose_name_plural = "Rotation Status"
         constraints = [
             models.UniqueConstraint(fields=['mc_no', 'count_time'], name='unique_mc_count_time')
         ]
@@ -84,12 +88,20 @@ class ProcessorCursor(models.Model):
 class Company(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
     name = models.CharField(max_length=150, unique=True)
 
+    class Meta:
+        verbose_name = "Company"
+        verbose_name_plural = "Companies"
+
     def __str__(self):
         return f"{self.name}"
     
 class Building(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
     name = models.CharField(max_length=150, unique=True)
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="building_company")
+
+    class Meta:
+        verbose_name = "Building"
+        verbose_name_plural = "Buildings"
 
     def __str__(self):
         return f"{self.name}"
@@ -98,12 +110,20 @@ class Floor(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
     name = models.CharField(max_length=150, unique=True)
     building = models.ForeignKey(Building, on_delete=models.CASCADE, related_name="floor_building")
 
+    class Meta:
+        verbose_name = "Floor"
+        verbose_name_plural = "Floors"
+
     def __str__(self):
         return f"{self.name}"
     
 class Block(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
     name = models.CharField(max_length=150, unique=True)
     floor = models.ForeignKey(Floor, on_delete=models.CASCADE, related_name="block_floor")
+
+    class Meta:
+        verbose_name = "Block"
+        verbose_name_plural = "Blocks"
 
     def __str__(self):
         return f"{self.name}"
@@ -123,6 +143,10 @@ class Shift(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
     start_time = models.TimeField()
     end_time = models.TimeField()
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="shift_company")
+
+    class Meta:
+        verbose_name = "Shift"
+        verbose_name_plural = "Shifts"
 
     def __str__(self):
         return f"{self.name}"

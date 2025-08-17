@@ -289,7 +289,7 @@ def shiftRestore(request, pk):
 
 
 def machines(request):
-    list_display = ('sl', 'mc_no', 'brand', 'model', 'category', 'block', 'created_by', 'created_at', 'updated_by', 'updated_at',)
+    list_display = ('sl', 'mc_no', 'brand', 'model', 'category', 'block', 'block__floor__building__company', 'created_by', 'created_at', 'updated_by', 'updated_at',)
     default_sort = ['mc_no']  
     list_filter = ('mc_no', 'brand', 'model', 'category', 'block',)  
 
