@@ -25,9 +25,11 @@ urlpatterns = [
     path('login/', auth_views.LoginView.as_view(template_name='admin/login.html', extra_context={'title': 'Log in'}), name='login'),
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('admin/', admin.site.urls),
-    path('', include('core.urls')),
+    path('core/', include('core.urls')),
     path('lib/', include('library.urls')),
+    path('', include('frontend.urls')),
     path('summernote/', include('django_summernote.urls')),
+    path("django_plotly_dash/", include("django_plotly_dash.urls")),
 ] + debug_toolbar_urls()
 
 if settings.DEBUG:

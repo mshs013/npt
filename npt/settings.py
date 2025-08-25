@@ -53,9 +53,14 @@ INSTALLED_APPS = [
     'debug_toolbar',
     'reset_migrations',
     #'django_truncate',
+    "django_plotly_dash.apps.DjangoPlotlyDashConfig",
+    "dpd_static_support",
+    "channels",
+    'bootstrap4',
 
     'core',
     'library',
+    'frontend.apps.FrontendConfig',
 ]
 
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap4"
@@ -74,6 +79,8 @@ MIDDLEWARE = [
     'debug_toolbar.middleware.DebugToolbarMiddleware',
     #'django_htmx.middleware.HtmxMiddleware',
     'core.middleware.CurrentUserAndIdleTimeoutMiddleware',
+    "django_plotly_dash.middleware.BaseMiddleware",
+    "django_plotly_dash.middleware.ExternalRedirectionMiddleware",
 ]
 
 ROOT_URLCONF = 'npt.urls'
@@ -345,3 +352,29 @@ SUMMERNOTE_CONFIG = {
         ['view', ['fullscreen', 'codeview', 'help']],
     ],
 }
+
+# Allow iframe embedding from same-origin
+X_FRAME_OPTIONS = "SAMEORIGIN"
+
+PLOTLY_COMPONENTS = [
+    'dpd_static_support',
+    'dash_bootstrap_components',
+]
+
+PLOTLY_DASH = {
+    "serve_locally": True,
+    "suppress_callback_exceptions": True,
+    "enable_dev_tools": True,
+    "middleware": True,
+    "use_iframe": False,  # <-- important
+}
+# Channels setup (only needed if you want async/live updates)
+ASGI_APPLICATION = "npt.asgi.application"
+
+STATICFILES_FINDERS = [
+    "django.contrib.staticfiles.finders.FileSystemFinder",
+    "django.contrib.staticfiles.finders.AppDirectoriesFinder",
+    "django_plotly_dash.finders.DashAssetFinder",     # ✅ required
+    "django_plotly_dash.finders.DashComponentFinder", # ✅ required
+    "django_plotly_dash.finders.DashAppDirectoryFinder", # ✅ required
+]

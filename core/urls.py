@@ -2,7 +2,6 @@ from django.urls import path
 from core import views
 
 urlpatterns = [
-    path('', views.dashboard, name='home'),
     path('menu/', views.menu, name='view_menu'),
     path('menu/add/', views.menuForm, name='add_menu'),
     path('menu/<int:pk>/change/', views.menuForm, name='change_menu'),

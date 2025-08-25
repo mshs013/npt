@@ -1,12 +1,7 @@
-from django.shortcuts import render
 from core.utils.views import dynamic_view, dynamic_form_view, dynamic_delete_view, dynamic_trashed_view, dynamic_restore_view, dynamic_detail_view, dynamic_multiform_view
 from django.forms.widgets import CheckboxSelectMultiple
 
 # Create your views here.
-def dashboard(request):
-    context = { 'title' : 'Dashboard' }
-    return render(request, 'core/dashboard.html', context)
-
 def menu(request):
     list_display = ('name', 'parent', 'url', 'order', 'permission',)
     default_sort = ['-parent', 'order']  # Default sorting by name ascending and created_at descending
