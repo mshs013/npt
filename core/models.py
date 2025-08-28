@@ -340,7 +340,7 @@ class Machine(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
     speed_factor = models.IntegerField(null=True, blank=True)
     extra_cylinder = models.BooleanField(default=False)
     lycra_attach = models.BooleanField(default=False)
-    block = models.ForeignKey(Block, on_delete=models.SET_NULL, null=True, blank=True)
+    block = models.ForeignKey(Block, on_delete=models.CASCADE)
     mc_types = models.ManyToManyField(MachineType, related_name="machine_types", blank=True)
 
     class Meta:
