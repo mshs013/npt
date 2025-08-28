@@ -15,8 +15,8 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.conf import settings
 
-# Adjust this import to match your app name if not 'library'
-from library.models import NptReason, ProcessedNPT, RotationStatus
+# Adjust this import to match your app name if not 'core'
+from core.models import NptReason, ProcessedNPT, RotationStatus
 
 import paho.mqtt.client as mqtt
 
@@ -45,7 +45,7 @@ STATS_INTERVAL_SEC = 5  # print ingestion stats interval
 
 # --------- Helpers ---------
 def epoch_ms_to_dt(ts_ms: int) -> datetime:
-    """Convert device epoch milliseconds to a datetime."""
+    """Convert device epoch milliseconds to a datetime. Invalid/placeholder timestamps replaced with now."""
     try:
         dt = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc)
     except Exception:
@@ -53,9 +53,18 @@ def epoch_ms_to_dt(ts_ms: int) -> datetime:
         if ts_ms < 20_000_000_000:
             dt = datetime.fromtimestamp(ts_ms, tz=timezone.utc)
         else:
-            raise
-    # Convert to Asia/Dhaka, then drop tzinfo (since USE_TZ=False)
-    return dt.astimezone(BD_TZ).replace(tzinfo=None)
+            dt = datetime.now(timezone.utc)  # fallback to now
+
+    # Convert to Asia/Dhaka
+    local_dt = dt.astimezone(BD_TZ)
+
+    # Replace obviously invalid timestamps with now
+    if local_dt.year < 2000:
+        LOG.warning("Received invalid timestamp %s, replacing with now", local_dt.isoformat())
+        local_dt = datetime.now(BD_TZ)
+
+    # Drop tzinfo if USE_TZ=False
+    return local_dt.replace(tzinfo=None)
 
 
 # Dataclasses used for queues
@@ -182,67 +191,61 @@ class Ingestor:
             self.stats["mc_status_bad"] += 1
             return
 
-        if status == "off":
-            # Always create a new row with off_time
-            obj = ProcessedNPT(mc_no=mc, off_time=ts)
-            try:
-                self.q_off.put_nowait(obj)
-                self.stats["off_enqueued"] += 1
-            except Full:
-                LOG.error("Queue full: dropping OFF event mc=%s ts=%s", mc, ts.isoformat())
-                self.stats["off_dropped"] += 1
-            return
+        try:
+            with transaction.atomic():
+                last_row = (
+                    ProcessedNPT.objects
+                    .select_for_update(skip_locked=True)
+                    .filter(mc_no=mc)
+                    .order_by("-off_time")
+                    .first()
+                )
 
-        if status in ("on", "btn"):
-            # Wrap in transaction to safely use select_for_update
-            try:
-                with transaction.atomic():
-                    last_row = (
-                        ProcessedNPT.objects
-                        .select_for_update(skip_locked=True)
-                        .filter(mc_no=mc)
-                        .order_by("-off_time")
-                        .first()
-                    )
-
-                    if status == "on":
-                        if last_row and last_row.on_time is None:
-                            last_row.on_time = ts
-                            last_row.save(update_fields=["on_time"])
-                            self.stats["on_closed"] += 1
-                        else:
-                            # ON without prior OFF → create row
-                            obj = ProcessedNPT(mc_no=mc, on_time=ts, off_time=None)
-                            self.q_off.put_nowait(obj)
-                            self.stats["on_created"] += 1
-
-                    elif status == "btn":
+                if status == "off":
+                    # Insert new OFF only if last row is None or last_row.on_time is not null
+                    if not last_row or last_row.on_time is not None:
+                        obj = ProcessedNPT(mc_no=mc, off_time=ts)
                         try:
-                            btn = int(data["btn"])
-                        except Exception:
-                            LOG.error("Btn status missing/invalid btn (data=%s)", data)
-                            self.stats["btn_bad"] += 1
-                            return
-
-                        reason_id = self.reason_map.get(btn)
-                        if reason_id is None:
-                            LOG.warning("Btn %s not mapped to reason (mc=%s)", btn, mc)
-                            self.stats["btn_unmapped"] += 1
-
-                        if last_row:
-                            if last_row.reason_id is None:
-                                last_row.reason_id = reason_id
-                                last_row.save(update_fields=["reason_id"])
-                                self.stats["btn_applied"] += 1
-                            else:
-                                self.stats["btn_skipped"] += 1
-                        else:
-                            # BTN without prior OFF → create row with reason_id
-                            obj = ProcessedNPT(mc_no=mc, reason_id=reason_id, off_time=None)
                             self.q_off.put_nowait(obj)
-                            self.stats["btn_created"] += 1
-            except Exception as e:
-                LOG.exception("Error handling ON/BTN event: %s", e)
+                            self.stats["off_enqueued"] += 1
+                        except Full:
+                            LOG.error("Queue full: dropping OFF event mc=%s ts=%s", mc, ts.isoformat())
+                            self.stats["off_dropped"] += 1
+                    else:
+                        LOG.info("Skipping OFF enqueue: last ON not closed for mc=%s", mc)
+
+                elif status == "on":
+                    if last_row and last_row.on_time is None:
+                        last_row.on_time = ts
+                        last_row.save(update_fields=["on_time"])
+                        self.stats["on_closed"] += 1
+                    else:
+                        LOG.info("Skipping ON update: no row to update or on_time already set for mc=%s", mc)
+
+                elif status == "btn":
+                    try:
+                        btn = int(data["btn"])
+                    except Exception:
+                        LOG.error("Invalid/missing btn in data: %s", data)
+                        self.stats["btn_bad"] += 1
+                        return
+
+                    reason_id = self.reason_map.get(btn)
+                    if reason_id is None:
+                        LOG.warning("Btn %s not mapped to reason (mc=%s)", btn, mc)
+                        self.stats["btn_unmapped"] += 1
+                        return
+
+                    if last_row and last_row.reason_id is None:
+                        last_row.reason_id = reason_id
+                        last_row.save(update_fields=["reason_id"])
+                        self.stats["btn_applied"] += 1
+                    else:
+                        LOG.info("Skipping BTN update: no row or reason_id already set for mc=%s", mc)
+                        self.stats["btn_skipped"] += 1
+
+        except Exception as e:
+            LOG.exception("Error handling MC status event: %s", e)
 
     def handle_rotation(self, data: Dict[str, Any]) -> None:
         try:

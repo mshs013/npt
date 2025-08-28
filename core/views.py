@@ -1,5 +1,10 @@
-from core.utils.views import dynamic_view, dynamic_form_view, dynamic_delete_view, dynamic_trashed_view, dynamic_restore_view, dynamic_detail_view, dynamic_multiform_view
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib import messages
 from django.forms.widgets import CheckboxSelectMultiple
+from core.models import User
+from core.forms import DynamicUserProfileForm
+from core.utils.views import dynamic_view, dynamic_form_view, dynamic_delete_view, dynamic_trashed_view, dynamic_restore_view, dynamic_detail_view, dynamic_multiform_view
+
 
 # Create your views here.
 def menu(request):
@@ -53,36 +58,27 @@ def user(request):
     return dynamic_view(request, 'core', 'User', context)
 
 def userForm(request, pk=None):
+    instance = get_object_or_404(User, pk=pk) if pk else None
 
-    model_configs = {
-        'head_fields': ['first_name', 'last_name', 'email', 'password', 'is_active', 'is_staff', 'user_permissions'],
-        'body_models': [
-            {
-                'model_name': 'Profile',
-                'fields': ['official_id', 'contact_no', 'department', 'designation', 'user_img', 'user_sign'],
-                'fk_field': 'user',
-            }
-        ]
-    }
-    
-    hide_fields = ['password']  # Hide password field in edit form
-    readonly_fields = ['email']  # Make email read-only in edit mode
-    widget_overrides = {
-        'user_permissions': CheckboxSelectMultiple(),
-    }
+    if request.method == 'POST':
+        form = DynamicUserProfileForm(request.POST, request.FILES, instance=instance)
+        if form.is_valid():
+            user = form.save(commit=False)  # save User + Profile but not M2M yet
+            user.save()                     # now user has an ID
+            form.save_m2m()                 # now save blocks/machines relationships
 
-    return dynamic_multiform_view(
-        request,
-        app_label='core',
-        head_model_name='User',
-        pk=pk,
-        model_configs=model_configs,
-        hide_fields=hide_fields,
-        readonly_fields=readonly_fields,
-        widget_overrides=widget_overrides,
-        is_form_row=False,
-        extra_form=1,
-    )
+            messages.success(request, 'User saved successfully.')
+            return redirect('view_user')
+    else:
+        form = DynamicUserProfileForm(instance=instance)
+
+    title = "Edit User" if instance else "Add User"
+    context = {
+        'form': form,
+        'instance': instance,
+        'title': title,
+    }
+    return render(request, 'core/dynamic_user_form.html', context)
 
 def userDelete(request, pk):
     return dynamic_delete_view(request, 'core', 'User', pk)
@@ -158,3 +154,293 @@ def designationTrashed(request):
 
 def designationRestore(request, pk):
     return dynamic_restore_view(request, 'core', 'Designation', pk)
+
+def reason(request):
+    list_display = ('sl', 'name', 'min_time', 'remote_num', 'created_by', 'created_at', 'updated_by', 'updated_at',)
+    default_sort = ['remote_num']  # Default sorting by name ascending and created_at descending
+    list_filter = ('name', 'min_time', 'remote_num')  # Filters to include in the form
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+        'per_page': 15,
+    }
+    
+    return dynamic_view(request, 'core', 'NptReason', context)
+
+def reasonForm(request, pk=None):
+    fields = ('name', 'min_time', 'remote_num',)  # Specify fields to include in the form
+    return dynamic_form_view(request, 'core', 'NptReason', pk, fields)
+
+def reasonDelete(request, pk):
+    return dynamic_delete_view(request, 'core', 'NptReason', pk)
+
+def reasonTrashed(request):
+    list_display = ('sl', 'name', 'min_time', 'remote_num', 'deleted_by', 'deleted_at',)
+    default_sort = ['-deleted_at']  # Default sorting by name ascending and deleted_at descending
+    list_filter = ('name', 'min_time', 'remote_num')  # Filters to include in the form
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+    }
+    
+    return dynamic_trashed_view(request, 'core', 'NptReason', context)
+
+def reasonRestore(request, pk):
+    return dynamic_restore_view(request, 'core', 'NptReason', pk)
+
+def company(request):
+    list_display = ('sl', 'name', 'created_by', 'created_at', 'updated_by', 'updated_at',)
+    default_sort = ['name']  # Default sorting by name ascending and created_at descending
+    list_filter = ('name',)  # Filters to include in the form
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+        'per_page': 15,
+    }
+    
+    return dynamic_view(request, 'core', 'Company', context)
+
+def companyForm(request, pk=None):
+    fields = ('name',)  # Specify fields to include in the form
+    return dynamic_form_view(request, 'core', 'Company', pk, fields)
+
+def companyDelete(request, pk):
+    return dynamic_delete_view(request, 'core', 'Company', pk)
+
+def companyTrashed(request):
+    list_display = ('sl', 'name', 'deleted_by', 'deleted_at',)
+    default_sort = ['-deleted_at']  # Default sorting by name ascending and deleted_at descending
+    list_filter = ('name',)  # Filters to include in the form
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+    }
+    
+    return dynamic_trashed_view(request, 'core', 'Company', context)
+
+def companyRestore(request, pk):
+    return dynamic_restore_view(request, 'core', 'Company', pk)
+
+def building(request):
+    list_display = ('sl', 'name', 'company', 'created_by', 'created_at', 'updated_by', 'updated_at',)
+    default_sort = ['name', 'company']  # Default sorting by name ascending and created_at descending
+    list_filter = ('name', 'company',)  # Filters to include in the form
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+        'per_page': 15,
+    }
+    
+    return dynamic_view(request, 'core', 'Building', context)
+
+def buildingForm(request, pk=None):
+    fields = ('name', 'company',)  # Specify fields to include in the form
+    return dynamic_form_view(request, 'core', 'Building', pk, fields)
+
+def buildingDelete(request, pk):
+    return dynamic_delete_view(request, 'core', 'Building', pk)
+
+def buildingTrashed(request):
+    list_display = ('sl', 'name', 'company', 'deleted_by', 'deleted_at',)
+    default_sort = ['-deleted_at']  # Default sorting by name ascending and deleted_at descending
+    list_filter = ('name',)  # Filters to include in the form
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+    }
+    
+    return dynamic_trashed_view(request, 'core', 'Building', context)
+
+def buildingRestore(request, pk):
+    return dynamic_restore_view(request, 'core', 'Building', pk)
+
+def floor(request):
+    list_display = ('sl', 'name', 'building', 'created_by', 'created_at', 'updated_by', 'updated_at',)
+    default_sort = ['name', 'building']  # Default sorting by name ascending and created_at descending
+    list_filter = ('name', 'building',)  # Filters to include in the form
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+        'per_page': 15,
+    }
+    
+    return dynamic_view(request, 'core', 'Floor', context)
+
+def floorForm(request, pk=None):
+    fields = ('name', 'building',)  # Specify fields to include in the form
+    return dynamic_form_view(request, 'core', 'Floor', pk, fields)
+
+def floorDelete(request, pk):
+    return dynamic_delete_view(request, 'core', 'Floor', pk)
+
+def floorTrashed(request):
+    list_display = ('sl', 'name', 'building', 'deleted_by', 'deleted_at',)
+    default_sort = ['-deleted_at']  # Default sorting by name ascending and deleted_at descending
+    list_filter = ('name',)  # Filters to include in the form
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+    }
+    
+    return dynamic_trashed_view(request, 'core', 'Floor', context)
+
+def floorRestore(request, pk):
+    return dynamic_restore_view(request, 'core', 'Floor', pk)
+
+def block(request):
+    list_display = ('sl', 'name', 'floor', 'created_by', 'created_at', 'updated_by', 'updated_at',)
+    default_sort = ['name', 'floor']  # Default sorting by name ascending and created_at descending
+    list_filter = ('name', 'floor',)  # Filters to include in the form
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+        'per_page': 15,
+    }
+    
+    return dynamic_view(request, 'core', 'Block', context)
+
+def blockForm(request, pk=None):
+    fields = ('name', 'floor',)  # Specify fields to include in the form
+    return dynamic_form_view(request, 'core', 'Block', pk, fields)
+
+def blockDelete(request, pk):
+    return dynamic_delete_view(request, 'core', 'Block', pk)
+
+def blockTrashed(request):
+    list_display = ('sl', 'name', 'floor', 'deleted_by', 'deleted_at',)
+    default_sort = ['-deleted_at']  # Default sorting by name ascending and deleted_at descending
+    list_filter = ('name',)  # Filters to include in the form
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+    }
+    
+    return dynamic_trashed_view(request, 'core', 'Block', context)
+
+def blockRestore(request, pk):
+    return dynamic_restore_view(request, 'core', 'Block', pk)
+
+def machinetype(request):
+    list_display = ('sl', 'name', 'created_by', 'created_at', 'updated_by', 'updated_at',)
+    default_sort = ['name']  # Default sorting by name ascending and created_at descending
+    list_filter = ('name',)  # Filters to include in the form
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+        'per_page': 15,
+    }
+    
+    return dynamic_view(request, 'core', 'MachineType', context)
+
+def machinetypeForm(request, pk=None):
+    fields = ('name',)  # Specify fields to include in the form
+    return dynamic_form_view(request, 'core', 'MachineType', pk, fields)
+
+def machinetypeDelete(request, pk):
+    return dynamic_delete_view(request, 'core', 'MachineType', pk)
+
+def machinetypeTrashed(request):
+    list_display = ('sl', 'name', 'deleted_by', 'deleted_at',)
+    default_sort = ['-deleted_at']  # Default sorting by name ascending and deleted_at descending
+    list_filter = ('name',)  # Filters to include in the form
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+    }
+    
+    return dynamic_trashed_view(request, 'core', 'MachineType', context)
+
+def machinetypeRestore(request, pk):
+    return dynamic_restore_view(request, 'core', 'MachineType', pk)
+
+def machine(request):
+    list_display = ('sl', 'mc_no', 'brand', 'model', 'category', 'block', 'block__floor__building__company', 'created_by', 'created_at', 'updated_by', 'updated_at',)
+    default_sort = ['mc_no']  
+    list_filter = ('mc_no', 'brand', 'model', 'category', 'block',)  
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+        'per_page': 15,
+    }
+    
+    return dynamic_view(request, 'core', 'Machine', context)
+
+def machineForm(request, pk=None):
+    fields = ('mc_no', 'device_mc', 'brand', 'model', 'category', 'dia', 'feeder', 'shinker', 'track', 'max_rpm', 'gg', 'speed_factor', 'extra_cylinder', 'lycra_attach', 'block', 'mc_types',)  # Specify fields to include in the form
+    widget_overrides = {
+        'mc_types': CheckboxSelectMultiple,
+    }
+    return dynamic_form_view(request, 'core', 'Machine', pk, fields, widget_overrides)
+
+def machineDelete(request, pk):
+    return dynamic_delete_view(request, 'core', 'Machine', pk)
+
+def machineTrashed(request):
+    list_display = ('sl', 'mc_no', 'brand', 'model', 'category', 'block', 'deleted_by', 'deleted_at',)
+    default_sort = ['-deleted_at']  
+    list_filter = ('mc_no', 'brand', 'model', 'category', 'block',)  
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+    }
+    
+    return dynamic_trashed_view(request, 'core', 'Machine', context)
+
+def machineRestore(request, pk):
+    return dynamic_restore_view(request, 'core', 'Machine', pk)
+    
+### NPT Log
+def npt(request):
+    list_display = ('sl', 'mc_no', 'reason', 'off_time', 'on_time', 'get_duration',)
+    default_sort = ['mc_no', '-on_time']  # Default sorting by name ascending and created_at descending
+    list_filter = ('mc_no', 'reason',)  # Filters to include in the form
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+    }
+    
+    return dynamic_view(request, 'core', 'ProcessedNPT', context)
+
+### Rotation Log
+def rotation(request):
+    list_display = ('sl', 'mc_no', 'count', 'count_time',)
+    default_sort = ['mc_no', '-count_time']  # Default sorting by name ascending and created_at descending
+    list_filter = ('mc_no',)  # Filters to include in the form
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+    }
+    
+    return dynamic_view(request, 'core', 'RotationStatus', context)

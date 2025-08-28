@@ -1,0 +1,48 @@
+<!-- templates/core/dynamic_multiform.html -->
+{% extends "core/base.html" %}
+{% load crispy_forms_tags custom_filters static jazzmin i18n %}
+
+{% block extra_css %}
+    {{  block.super }}
+    <link rel="stylesheet" href="{% static 'adminlte/plugins/select2/css/select2.min.css' %}">
+    <link rel="stylesheet" href="{% static 'adminlte/plugins/select2-bootstrap4-theme/select2-bootstrap4.min.css' %}">
+    <link rel="stylesheet" href="{% static 'adminlte/plugins/tempusdominus-bootstrap-4/css/tempusdominus-bootstrap-4.min.css' %}">
+{% endblock %}
+
+{% block content_title %}
+    {% if pk %}
+        Edit User
+    {% else %}
+        Add User
+    {% endif %}
+{% endblock %}
+
+{% block page_actions %}
+    <div class="col-12 col-md-auto d-flex align-items-center justify-content-end page-actions">
+        <a class="btn btn-success float-right back-link" href="{% url 'view_user' %}"><i class="fas fa-step-backward"></i> User</a>
+    </div>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-body">
+        
+        <form method="POST" enctype="multipart/form-data">
+            {% csrf_token %}
+            {% crispy form %}
+            <button type="submit" class="btn btn-primary">Save</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+    {{  block.super }}
+    <script type="text/javascript" src="{% static 'adminlte/plugins/select2/js/select2.min.js' %}"></script>
+    <script type="text/javascript">
+    $(document).ready(function () {
+        // Allow for styling of selects
+        $('.select').addClass('form-control').select2({ theme: 'bootstrap4', width: 'element' });
+    });
+    </script>
+{% endblock %}

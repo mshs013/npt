@@ -79,6 +79,8 @@ MIDDLEWARE = [
     'debug_toolbar.middleware.DebugToolbarMiddleware',
     #'django_htmx.middleware.HtmxMiddleware',
     'core.middleware.CurrentUserAndIdleTimeoutMiddleware',
+    'core.middleware.LoginRequiredMiddleware',
+    'core.middleware.DynamicPermissionMiddleware',
     "django_plotly_dash.middleware.BaseMiddleware",
     "django_plotly_dash.middleware.ExternalRedirectionMiddleware",
 ]
@@ -178,6 +180,12 @@ PUBLIC_PATHS = [
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+    "core.backends.MachineBlockPermissionBackend",
+]
+
 
 # Auth User Model
 AUTH_USER_MODEL = "core.User"

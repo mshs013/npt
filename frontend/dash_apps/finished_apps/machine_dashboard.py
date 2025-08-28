@@ -7,7 +7,8 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 
-from library.models import ProcessedNPT, RotationStatus, Shift
+from core.models import ProcessedNPT, RotationStatus
+from library.models import Shift
 
 app = DjangoDash("MachineDashboard", serve_locally=True)
 

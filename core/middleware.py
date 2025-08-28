@@ -4,6 +4,8 @@ from datetime import datetime
 from django.conf import settings
 from django.contrib.auth import logout
 from django.shortcuts import redirect
+from django.apps import apps
+from django.core.exceptions import PermissionDenied
 
 _thread_locals = threading.local()
 
@@ -12,54 +14,114 @@ def get_current_user():
     user = getattr(_thread_locals, 'user', None)
     return user if user and user.is_authenticated else None
 
+
+# ---------------------------
+# 1️⃣ Current user & idle timeout
+# ---------------------------
 class CurrentUserAndIdleTimeoutMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        # Set the current user in thread-local storage before processing the request
+        # Set current user in thread-local storage
         _thread_locals.user = request.user
 
-        # Handle idle timeout logic if the user is authenticated
         if request.user.is_authenticated:
-            timeout = getattr(settings, 'SESSION_IDLE_TIMEOUT', 600)  # Default to 10 minutes
+            timeout = getattr(settings, 'SESSION_IDLE_TIMEOUT', 600)  # 10 min default
             last_activity = request.session.get('last_activity')
 
             if last_activity:
                 elapsed_time = datetime.now() - datetime.fromisoformat(last_activity)
                 if elapsed_time.total_seconds() > timeout:
-                    # Log out user and flush session on timeout
                     logout(request)
                     request.session.flush()
                     return self.get_response(request)
 
-            # Update the last activity time
             request.session['last_activity'] = datetime.now().isoformat()
 
-        # Process the request and generate the response
         response = self.get_response(request)
 
-        # Clean up the user from thread-local storage after the response is processed
+        # Clean up
         if hasattr(_thread_locals, 'user'):
             del _thread_locals.user
 
         return response
 
 
+# ---------------------------
+# 2️⃣ Login required
+# ---------------------------
 class LoginRequiredMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        # List of paths that are allowed without authentication
-        public_paths = getattr(settings, 'PUBLIC_PATHS', ['/login/', '/static/', '/media/'])
-        
-        # Check if the path is in the list of public paths
+        public_paths = getattr(settings, 'PUBLIC_PATHS', ['/login/', '/logout/', '/static/', '/media/'])
         if not request.user.is_authenticated and not any(request.path.startswith(path) for path in public_paths):
-            # Build the next URL parameter to redirect back after login
             next_url = request.path.split("?next=")[0]
             login_url_with_next = f"{settings.LOGIN_URL}?next={next_url}"
             return redirect(login_url_with_next)
-        
+
         response = self.get_response(request)
         return response
+
+
+# ---------------------------
+# 3️⃣ Dynamic Permission Middleware
+# ---------------------------
+def skip_permission(view_func):
+    """Decorator to skip permission checks."""
+    setattr(view_func, "_skip_permission", True)
+    return view_func
+
+
+class DynamicPermissionMiddleware:
+    """
+    Middleware that dynamically checks permissions based on URL name.
+    - If URL name maps to a model: <action>_<modelname_lower> -> app_label.<action>_<modelname>
+    - If no model found: use URL name itself as permission codename
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        resolver_match = getattr(request, "resolver_match", None)
+        if resolver_match:
+            view_func = resolver_match.func
+            url_name = resolver_match.url_name
+
+            if not url_name or getattr(view_func, "_skip_permission", False):
+                return self.get_response(request)
+
+            perm_name = self.get_permission_from_url(url_name)
+
+            if not request.user.is_superuser and not request.user.has_perm(perm_name):
+                raise PermissionDenied(f"You do not have permission: {perm_name}")
+
+        return self.get_response(request)
+
+    @staticmethod
+    def get_permission_from_url(url_name: str) -> str:
+        """
+        Determine permission codename from URL name:
+        - If URL name matches a model: <action>_<modelname_lower> -> app_label.<action>_<modelname>
+        - Otherwise: return URL name itself
+        """
+        if "_" in url_name:
+            action, model_str = url_name.split("_", 1)
+            model = DynamicPermissionMiddleware.get_model_by_lower_name(model_str)
+            if model:
+                app_label = model._meta.app_label
+                model_name = model._meta.model_name
+                return f"{app_label}.{action}_{model_name}"
+
+        # If no model found, use URL name itself as permission codename
+        return url_name
+
+    @staticmethod
+    def get_model_by_lower_name(model_str):
+        for model in apps.get_models():
+            if model.__name__.lower() == model_str.lower():
+                return model
+        return None
