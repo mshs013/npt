@@ -393,10 +393,11 @@ def machine(request):
 
 def machineForm(request, pk=None):
     fields = ('mc_no', 'device_mc', 'brand', 'model', 'category', 'dia', 'feeder', 'shinker', 'track', 'max_rpm', 'gg', 'speed_factor', 'extra_cylinder', 'lycra_attach', 'block', 'mc_types',)  # Specify fields to include in the form
+    readonly_fields = ['device_mc']  # Make email read-only in edit mode
     widget_overrides = {
         'mc_types': CheckboxSelectMultiple,
     }
-    return dynamic_form_view(request, 'core', 'Machine', pk, fields, widget_overrides)
+    return dynamic_form_view(request, 'core', 'Machine', pk, fields, widget_overrides, readonly_fields)
 
 def machineDelete(request, pk):
     return dynamic_delete_view(request, 'core', 'Machine', pk)

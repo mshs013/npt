@@ -253,7 +253,7 @@ def dynamic_view(request, app_name, model_name, context):
     return render(request, 'core/dynamic_list.html', context)
 
 
-def dynamic_form_view(request, app_name, model_name, pk=None, fields=None, widget_overrides=None):
+def dynamic_form_view(request, app_name, model_name, pk=None, fields=None, widget_overrides=None, readonly_fields=None):
     """Dynamic form view (add or edit) with customizable fields."""
     model = get_model(app_name, model_name)
     form_class = forms.modelform_factory(model, fields=fields if fields else '__all__')
@@ -283,6 +283,11 @@ def dynamic_form_view(request, app_name, model_name, pk=None, fields=None, widge
             field.widget.attrs.update({'class': 'form-control datetimepicker', 'autocomplete': 'off'})
         else:
             field.widget.attrs.update({'class': 'form-control'})
+
+        # Make field readonly if in edit mode and in readonly_fields
+        if pk and readonly_fields and field_name in readonly_fields:
+            field.widget.attrs['readonly'] = True
+            field.required = False  # Optional: prevent validation errors
 
     # Apply widget overrides
     if widget_overrides:
