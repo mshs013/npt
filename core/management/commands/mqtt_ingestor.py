@@ -15,9 +15,8 @@ from typing import Optional, Dict, Any, List
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from django.conf import settings
 
-# Adjust these imports to match your app
+# Adjust imports to your app
 from core.models import NptReason, ProcessedNPT, RotationStatus, Machine
 
 import paho.mqtt.client as mqtt
@@ -60,7 +59,7 @@ def epoch_ms_to_dt(ts_ms: int) -> datetime:
 
 @dataclass
 class McStatusMsg:
-    mc: str
+    machine: str
     status: str
     ts: datetime
     btn: Optional[int] = None
@@ -69,7 +68,7 @@ class McStatusMsg:
 
 @dataclass
 class RotationMsg:
-    mc: str
+    machine: str
     rotation: int
     ts: datetime
 
@@ -99,8 +98,8 @@ class Ingestor:
         self.q_off: "Queue[ProcessedNPT]" = Queue(maxsize=QUEUE_MAXSIZE)
         self.q_on: "Queue[McStatusMsg]" = Queue(maxsize=QUEUE_MAXSIZE)
 
-        self.reason_map: Dict[int, int] = {}  # btn -> reason_id
-        self.machine_map: Dict[str, Machine] = {}  # lowercase_mac -> Machine instance
+        self.reason_map: Dict[int, int] = {}
+        self.machine_map: Dict[str, Machine] = {}
         self.stats = defaultdict(int)
         self.last_stats_time = time.time()
 
@@ -153,25 +152,21 @@ class Ingestor:
 
         self._maybe_log_stats()
 
-    # ---------- Machine map ----------
+    # ---------- Machine & Reason map refresh ----------
     def refresh_machine_map(self):
         while not self.shutdown.is_set():
             try:
                 with transaction.atomic():
-                    rows = list(Machine.objects.filter(is_deleted=False).values("id", "mac_address"))
-                    self.machine_map = {
-                        r["mac_address"].lower(): Machine.objects.get(id=r["id"])
-                        for r in rows
-                    }
+                    rows = list(Machine.objects.filter(is_deleted=False).values("id", "device_mc"))
+                    self.machine_map = {r["device_mc"].lower(): Machine.objects.get(id=r["id"]) for r in rows}
                 LOG.info("Refreshed machine map: %d machines", len(self.machine_map))
             except Exception as e:
                 LOG.error("Failed refreshing machine map: %s", e)
-            for _ in range(MC_REFRESH_SEC * 10):  # refresh every 60 seconds in 0.1s increments
+            for _ in range(MC_REFRESH_SEC * 10):
                 if self.shutdown.is_set():
                     return
                 time.sleep(0.1)
 
-    # ---------- Reason map ----------
     def refresh_reason_map(self):
         while not self.shutdown.is_set():
             try:
@@ -189,7 +184,7 @@ class Ingestor:
     # ---------- Handlers ----------
     def handle_mc_status(self, data: Dict[str, Any]) -> None:
         try:
-            mc = str(data["mc"]).strip().lower()
+            mc_raw = str(data["mc"]).strip().lower()
             status = str(data["status"]).strip().lower()
             ts = epoch_ms_to_dt(int(data["timestamp"]))
         except Exception as e:
@@ -197,9 +192,9 @@ class Ingestor:
             self.stats["mc_status_bad"] += 1
             return
 
-        machine = self.machine_map.get(mc)
+        machine = self.machine_map.get(mc_raw)
         if not machine:
-            LOG.warning("MC %s not found in machine map", mc)
+            LOG.warning("MC %s not found in machine map", mc_raw)
             self.stats["mc_unknown"] += 1
             return
 
@@ -207,22 +202,22 @@ class Ingestor:
             with transaction.atomic():
                 last_row = (
                     ProcessedNPT.objects.select_for_update(skip_locked=True)
-                    .filter(mc_no=machine)
+                    .filter(machine=machine)
                     .order_by("-off_time")
                     .first()
                 )
 
                 if status == "off":
                     if not last_row or last_row.on_time is not None:
-                        obj = ProcessedNPT(mc_no=machine, off_time=ts)
+                        obj = ProcessedNPT(machine=machine, off_time=ts)
                         try:
                             self.q_off.put_nowait(obj)
                             self.stats["off_enqueued"] += 1
                         except Full:
-                            LOG.error("Queue full: dropping OFF event mc=%s ts=%s", mc, ts.isoformat())
+                            LOG.error("Queue full: dropping OFF event mc=%s ts=%s", mc_raw, ts.isoformat())
                             self.stats["off_dropped"] += 1
                     else:
-                        LOG.info("Skipping OFF enqueue: last ON not closed for mc=%s", mc)
+                        LOG.info("Skipping OFF enqueue: last ON not closed for mc=%s", mc_raw)
 
                 elif status == "on":
                     if last_row and last_row.on_time is None:
@@ -230,7 +225,7 @@ class Ingestor:
                         last_row.save(update_fields=["on_time"])
                         self.stats["on_closed"] += 1
                     else:
-                        LOG.info("Skipping ON update: no row to update or on_time already set for mc=%s", mc)
+                        LOG.info("Skipping ON update: no row to update or on_time already set for mc=%s", mc_raw)
 
                 elif status == "btn":
                     try:
@@ -242,7 +237,7 @@ class Ingestor:
 
                     reason_id = self.reason_map.get(btn)
                     if reason_id is None:
-                        LOG.warning("Btn %s not mapped to reason (mc=%s)", btn, mc)
+                        LOG.warning("Btn %s not mapped to reason (mc=%s)", btn, mc_raw)
                         self.stats["btn_unmapped"] += 1
                         return
 
@@ -251,14 +246,14 @@ class Ingestor:
                         last_row.save(update_fields=["reason_id"])
                         self.stats["btn_applied"] += 1
                     else:
-                        LOG.info("Skipping BTN update: no row or reason_id already set for mc=%s", mc)
+                        LOG.info("Skipping BTN update: no row or reason_id already set for mc=%s", mc_raw)
 
         except Exception as e:
             LOG.exception("Error handling MC status event: %s", e)
 
     def handle_rotation(self, data: Dict[str, Any]) -> None:
         try:
-            mc = str(data["mc"]).strip().lower()
+            mc_raw = str(data["mc"]).strip().lower()
             rotation = int(data["rotation"])
             ts = epoch_ms_to_dt(int(data["timestamp"]))
         except Exception as e:
@@ -266,34 +261,200 @@ class Ingestor:
             self.stats["rotation_bad"] += 1
             return
 
-        machine = self.machine_map.get(mc)
+        machine = self.machine_map.get(mc_raw)
         if not machine:
-            LOG.warning("Rotation MC %s not found in machine map", mc)
+            LOG.warning("Rotation MC %s not found in machine map", mc_raw)
             self.stats["rotation_unknown"] += 1
             return
 
-        msg = RotationMsg(mc=machine, rotation=rotation, ts=ts)
+        msg = RotationMsg(machine=machine, rotation=rotation, ts=ts)
         try:
             self.q_rotation.put_nowait(msg)
             self.stats["rotation_enqueued"] += 1
         except Full:
-            LOG.error("Queue full: dropping ROTATION mc=%s ts=%s", mc, ts.isoformat())
+            LOG.error("Queue full: dropping ROTATION mc=%s ts=%s", mc_raw, ts.isoformat())
             self.stats["rotation_dropped"] += 1
 
-    # ---------- Workers (flush & apply ON) ----------
-    # Keep your previous worker_flush_off, worker_flush_rotation, worker_apply_on, flush, and stats code
-    # unchanged, except ensure `mc_no` uses Machine instance
+    # ---------- Worker threads ----------
+    def worker_flush_rotation(self):
+        batch: List[RotationMsg] = []
+        last_flush = time.time()
+        while not self.shutdown.is_set():
+            timeout = max(0.0, FLUSH_INTERVAL_SEC - (time.time() - last_flush))
+            try:
+                batch.append(self.q_rotation.get(timeout=timeout))
+            except Empty:
+                pass
+
+            if len(batch) >= BATCH_SIZE_ROTATION or (batch and time.time() - last_flush >= FLUSH_INTERVAL_SEC):
+                try:
+                    objs = [RotationStatus(machine=x.machine, count=x.rotation, count_time=x.ts) for x in batch]
+                    RotationStatus.objects.bulk_create(objs, ignore_conflicts=True, batch_size=1000)
+                    self.stats["rotation_flushed"] += len(objs)
+                except Exception as e:
+                    LOG.error("Rotation bulk_create failed: %s", e)
+                batch.clear()
+                last_flush = time.time()
+
+        # Final flush
+        if batch:
+            try:
+                objs = [RotationStatus(machine=x.machine, count=x.rotation, count_time=x.ts) for x in batch]
+                RotationStatus.objects.bulk_create(objs, ignore_conflicts=True, batch_size=1000)
+                self.stats["rotation_flushed"] += len(objs)
+            except Exception as e:
+                LOG.error("Rotation final flush failed: %s", e)
+
+    def worker_flush_off(self):
+        batch: List[ProcessedNPT] = []
+        last_flush = time.time()
+        while not self.shutdown.is_set():
+            timeout = max(0.0, FLUSH_INTERVAL_SEC - (time.time() - last_flush))
+            try:
+                batch.append(self.q_off.get(timeout=timeout))
+            except Empty:
+                pass
+
+            if len(batch) >= BATCH_SIZE_OFF or (batch and time.time() - last_flush >= FLUSH_INTERVAL_SEC):
+                try:
+                    ProcessedNPT.objects.bulk_create(batch, ignore_conflicts=True, batch_size=500)
+                    self.stats["off_flushed"] += len(batch)
+                except Exception as e:
+                    LOG.error("OFF bulk_create failed: %s", e)
+                batch.clear()
+                last_flush = time.time()
+
+        if batch:
+            try:
+                ProcessedNPT.objects.bulk_create(batch, ignore_conflicts=True, batch_size=500)
+                self.stats["off_flushed"] += len(batch)
+            except Exception as e:
+                LOG.error("OFF final flush failed: %s", e)
+
+    def worker_apply_on(self):
+        while not self.shutdown.is_set():
+            try:
+                msg = self.q_on.get(timeout=0.2)
+            except Empty:
+                continue
+            try:
+                with transaction.atomic():
+                    rec = (
+                        ProcessedNPT.objects
+                        .select_for_update(skip_locked=True)
+                        .filter(machine=msg.machine, on_time__isnull=True)
+                        .order_by("-off_time")
+                        .first()
+                    )
+                    if rec:
+                        if msg.ts >= rec.off_time:
+                            rec.on_time = msg.ts
+                            if getattr(msg, "reason_id", None) is not None:
+                                rec.reason_id = msg.reason_id
+                                rec.save(update_fields=["on_time", "reason_id"])
+                            else:
+                                rec.save(update_fields=["on_time"])
+                            self.stats["on_closed"] += 1
+                        else:
+                            self.stats["on_out_of_order"] += 1
+                    else:
+                        self.stats["on_no_open"] += 1
+            except Exception as e:
+                LOG.error("Applying ON failed for mc=%s: %s", msg.machine, e)
+                self.stats["on_failed"] += 1
+
+    # ---------- Final flush ----------
+    def flush(self):
+        LOG.info("Starting final flush of queues...")
+
+        # Rotation
+        batch_rot: List[RotationMsg] = []
+        while True:
+            try:
+                batch_rot.append(self.q_rotation.get_nowait())
+            except Empty:
+                break
+        if batch_rot:
+            objs = [RotationStatus(machine=x.machine, count=x.rotation, count_time=x.ts) for x in batch_rot]
+            try:
+                RotationStatus.objects.bulk_create(objs, ignore_conflicts=True, batch_size=1000)
+                self.stats["rotation_flushed"] += len(objs)
+            except Exception as e:
+                LOG.exception("Rotation flush failed: %s", e)
+
+        # OFF
+        batch_off: List[ProcessedNPT] = []
+        while True:
+            try:
+                batch_off.append(self.q_off.get_nowait())
+            except Empty:
+                break
+        if batch_off:
+            try:
+                ProcessedNPT.objects.bulk_create(batch_off, ignore_conflicts=True, batch_size=500)
+                self.stats["off_flushed"] += len(batch_off)
+            except Exception as e:
+                LOG.exception("OFF flush failed: %s", e)
+
+        # ON
+        while True:
+            try:
+                msg = self.q_on.get_nowait()
+            except Empty:
+                break
+            try:
+                with transaction.atomic():
+                    rec = (
+                        ProcessedNPT.objects
+                        .select_for_update(skip_locked=True)
+                        .filter(machine=msg.machine, on_time__isnull=True)
+                        .order_by("-off_time")
+                        .first()
+                    )
+                    if rec and msg.ts >= rec.off_time:
+                        rec.on_time = msg.ts
+                        if getattr(msg, "reason_id", None) is not None:
+                            rec.reason_id = msg.reason_id
+                            rec.save(update_fields=["on_time", "reason_id"])
+                        else:
+                            rec.save(update_fields=["on_time"])
+                        self.stats["on_closed"] += 1
+            except Exception as e:
+                LOG.exception("Failed applying ON during final flush: %s", e)
+
+        LOG.info("Final flush complete.")
+
+    # ---------- Stats ----------
+    def _maybe_log_stats(self):
+        now = time.time()
+        if now - self.last_stats_time >= STATS_INTERVAL_SEC:
+            self.last_stats_time = now
+            LOG.info(
+                "stats rotation_enq=%d flushed=%d off_enq=%d flushed=%d on_enq=%d closed=%d "
+                "bad_json=%d mc_bad=%d rot_bad=%d btn_unmapped=%d on_no_open=%d",
+                self.stats["rotation_enqueued"],
+                self.stats["rotation_flushed"],
+                self.stats["off_enqueued"],
+                self.stats["off_flushed"],
+                self.stats["on_enqueued"],
+                self.stats["on_closed"],
+                self.stats["bad_json"],
+                self.stats["mc_status_bad"],
+                self.stats["rotation_bad"],
+                self.stats["btn_unmapped"],
+                self.stats["on_no_open"],
+            )
 
     # ---------- Lifecycle ----------
     def start(self):
         self.t_reason = threading.Thread(target=self.refresh_reason_map, name="reason-map", daemon=True)
-        self.t_machine = threading.Thread(target=self.refresh_machine_map, name="machine-map", daemon=True)
+        self.t_mc = threading.Thread(target=self.refresh_machine_map, name="machine-map", daemon=True)
         self.t_rot = threading.Thread(target=self.worker_flush_rotation, name="rot-worker", daemon=True)
         self.t_off = threading.Thread(target=self.worker_flush_off, name="off-worker", daemon=True)
         self.t_on = threading.Thread(target=self.worker_apply_on, name="on-worker", daemon=True)
 
         self.t_reason.start()
-        self.t_machine.start()
+        self.t_mc.start()
         self.t_rot.start()
         self.t_off.start()
         self.t_on.start()
@@ -304,10 +465,7 @@ class Ingestor:
                 self.stop()
             except Exception:
                 LOG.exception("Error while stopping on signal")
-            try:
-                sys.exit(0)
-            except SystemExit:
-                pass
+            sys.exit(0)
 
         signal.signal(signal.SIGINT, handle_sigterm)
         signal.signal(signal.SIGTERM, handle_sigterm)
@@ -316,31 +474,11 @@ class Ingestor:
         self.client.loop_forever(retry_first_connection=True)
 
     def stop(self):
-        LOG.info("Stopping ingestor...")
         self.shutdown.set()
-        try:
-            self.client.loop_stop()
-            self.client.disconnect()
-        except Exception:
-            LOG.exception("Error stopping MQTT client")
-
-        for tname in ("t_rot", "t_off", "t_on", "t_reason", "t_machine"):
-            t = getattr(self, tname, None)
-            if t and isinstance(t, threading.Thread) and t.is_alive():
-                try:
-                    t.join(timeout=5.0)
-                except Exception:
-                    pass
-
-        try:
-            self.flush()
-        except Exception:
-            LOG.exception("Error during final flush")
-
-        LOG.info("Ingestor stopped.")
+        self.flush()
 
 
-# ---------- Management command ----------
+# --------- Management command ---------
 class Command(BaseCommand):
     help = "Subscribe to MQTT and insert into Django/PostgreSQL (NPT + Rotation)."
 

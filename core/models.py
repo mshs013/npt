@@ -347,7 +347,7 @@ class ProcessedNPT(models.Model):
         return now - self.off_time
 
     def __str__(self):
-        return f"{self.mc_no}"
+        return f"{self.machine}"
 
 class RotationStatus(models.Model):
     machine = models.ForeignKey(

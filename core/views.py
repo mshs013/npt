@@ -439,9 +439,9 @@ def machineRestore(request, pk):
     
 ### NPT Log
 def npt(request):
-    list_display = ('sl', 'mc_no', 'reason', 'off_time', 'on_time', 'get_duration',)
-    default_sort = ['mc_no', '-on_time']  # Default sorting by name ascending and created_at descending
-    list_filter = ('mc_no', 'reason',)  # Filters to include in the form
+    list_display = ('sl', 'machine', 'reason', 'off_time', 'on_time', 'get_duration',)
+    default_sort = ['machine', '-on_time']  # Default sorting by name ascending and created_at descending
+    list_filter = ('machine', 'reason',)  # Filters to include in the form
 
     context = {
         'list_display': list_display,
@@ -453,9 +453,9 @@ def npt(request):
 
 ### Rotation Log
 def rotation(request):
-    list_display = ('sl', 'mc_no', 'count', 'count_time',)
-    default_sort = ['mc_no', '-count_time']  # Default sorting by name ascending and created_at descending
-    list_filter = ('mc_no',)  # Filters to include in the form
+    list_display = ('sl', 'machine', 'count', 'count_time',)
+    default_sort = ['machine', '-count_time']  # Default sorting by name ascending and created_at descending
+    list_filter = ('machine',)  # Filters to include in the form
 
     context = {
         'list_display': list_display,
