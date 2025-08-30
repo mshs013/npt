@@ -1,14 +1,15 @@
 # frontend/dash_apps/finished_apps/machine_dashboard.py
-from dash import html, dcc, dash_table
+from dash import html, dcc
 from dash.dependencies import Input, Output
-import dash_bootstrap_components as dbc
 from django_plotly_dash import DjangoDash
-import pandas as pd
-import numpy as np
-import plotly.express as px
-
 from core.models import ProcessedNPT, RotationStatus, Machine
 from library.models import Shift
+from core.utils.utils import get_user_machines
+import dash_bootstrap_components as dbc
+from django.contrib.auth.models import AnonymousUser
+import pandas as pd
+import plotly.express as px
+
 
 app = DjangoDash("MachineDashboard", serve_locally=True)
 
@@ -74,11 +75,18 @@ def info_table(df, title="", color="bg-info", icon="fas fa-cog", unit=""):
 # ---------------------
 # Generate Data
 # ---------------------
-def generate_dashboard_data():
-    # Fetch data
-    npt_qs = ProcessedNPT.objects.select_related('machine', 'reason').all()
-    rot_qs = RotationStatus.objects.select_related('machine').all()
-    machines = Machine.objects.all()
+def generate_dashboard_data(user=None):
+    # Fetch machines user has access to
+    if user is None:
+        machines = Machine.objects.none()
+    else:
+        machines = get_user_machines(user)
+
+    # Fetch NPT and Rotation data filtered by user's machines
+    npt_qs = ProcessedNPT.objects.select_related('machine', 'reason')\
+        .filter(machine__in=machines)
+    rot_qs = RotationStatus.objects.select_related('machine')\
+        .filter(machine__in=machines)
     shifts = Shift.objects.all()
 
     # ---------------------
@@ -246,12 +254,18 @@ app.layout = dbc.Container([
     html.Div(id="dashboard-content")
 ], fluid=True)
 
+
 @app.callback(
     Output("dashboard-content", "children"),
     [Input("interval-update", "n_intervals")]
 )
-def update_dashboard(n):
-    data = generate_dashboard_data()
+
+def update_dashboard(n_intervals, callback_context=None, request=None, user=None):
+    # If the user isn’t automatically inferred, default to AnonymousUser
+    if not user or not user.is_authenticated:
+        user = AnonymousUser()
+
+    data = generate_dashboard_data(user=user)
     figs = data["figs"]
     tables = data["tables"]
 
