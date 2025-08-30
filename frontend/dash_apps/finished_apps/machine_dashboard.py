@@ -37,6 +37,41 @@ def info_box(value, label, color="bg-info", icon="fas fa-cog", unit=""):
     )
 
 # ---------------------
+# AdminLTE Table
+# ---------------------
+def info_table(df, title="", color="bg-info", icon="fas fa-cog", unit=""):
+    """
+    Convert a Pandas DataFrame into an AdminLTE-style info box table.
+    Each cell will be a mini info-box.
+    """
+    if df.empty:
+        return html.Div("No data available.", className="text-center")
+
+    # Table header
+    header = html.Tr([html.Th(col.replace("_", " ").title()) for col in df.columns])
+
+    # Table body
+    body = []
+    for _, row in df.iterrows():
+        cells = []
+        for col in df.columns:
+            val = row[col]
+            cells.append(
+                html.Td(
+                    val
+                )
+            )
+        body.append(html.Tr(cells))
+
+    return html.Div([
+        html.H5(title),
+        html.Div(
+            html.Table([html.Thead(header), html.Tbody(body)], className="table table-bordered"),
+            className="table-responsive p-0"
+        )
+    ])
+
+# ---------------------
 # Generate Data
 # ---------------------
 def generate_dashboard_data():
@@ -51,7 +86,7 @@ def generate_dashboard_data():
     # ---------------------
     npt_df = pd.DataFrame([{
         "machine_id": npt.machine.id if npt.machine else None,
-        "machine_label": f"{npt.machine.brand} - {npt.machine.model} - {npt.machine.mc_no}" if npt.machine else "Unknown",
+        "machine_label": f"{npt.machine.mc_no}" if npt.machine else "Unknown",
         "reason": npt.reason.name if npt.reason else "Unknown",
         "off_time": npt.off_time,
         "on_time": npt.on_time
@@ -59,7 +94,7 @@ def generate_dashboard_data():
 
     rot_df = pd.DataFrame([{
         "machine_id": rot.machine.id if rot.machine else None,
-        "machine_label": f"{rot.machine.brand} - {rot.machine.model} - {rot.machine.mc_no}" if rot.machine else "Unknown",
+        "machine_label": f"{rot.machine.mc_no}" if rot.machine else "Unknown",
         "count": rot.count,
         "count_time": rot.count_time
     } for rot in rot_qs])
@@ -178,20 +213,15 @@ def generate_dashboard_data():
         machine_summary = pd.DataFrame()
         shift_summary = pd.DataFrame()
 
-    machine_summary_table = dash_table.DataTable(
-        columns=[{"name": i.replace('_',' ').title(), "id": i} for i in machine_summary.columns],
-        data=machine_summary.to_dict('records'),
-        style_table={'overflowX': 'auto'},
-        style_cell={'textAlign': 'center', 'padding': '5px'},
-        style_header={'backgroundColor': '#f8f9fa', 'fontWeight': 'bold'}
+    # Replace DataTable with info_table
+    machine_summary_table = info_table(
+        machine_summary, title="Machine Performance Summary",
+        color="bg-info", icon="fas fa-cogs"
     )
 
-    shift_summary_table = dash_table.DataTable(
-        columns=[{"name": i.replace('_',' ').title(), "id": i} for i in shift_summary.columns],
-        data=shift_summary.to_dict('records'),
-        style_table={'overflowX': 'auto'},
-        style_cell={'textAlign': 'center', 'padding': '5px'},
-        style_header={'backgroundColor': '#f8f9fa', 'fontWeight': 'bold'}
+    shift_summary_table = info_table(
+        shift_summary, title="Shiftwise NPT Overview",
+        color="bg-warning", icon="fas fa-clock"
     )
 
     return {
@@ -238,11 +268,11 @@ def update_dashboard(n):
         # Cards
         dbc.Row([
             dbc.Col(info_box(f"{hours}h {minutes}m", "Total NPT", "bg-info", "fas fa-clock"), width=2),
-            dbc.Col(dbc.Card(dbc.CardBody([html.H5("Total Events"), html.H2(total_events)])), width=2),
-            dbc.Col(dbc.Card(dbc.CardBody([html.H5("Machines"), html.H2(machine_count)])), width=2),
-            dbc.Col(dbc.Card(dbc.CardBody([html.H5("Overall NPT %"), html.H2(f"{overall_npt_percent}%")])), width=2),
-            dbc.Col(dbc.Card(dbc.CardBody([html.H5("Overall PT %"), html.H2(f"{overall_pt_percent}%")])), width=2),
-            dbc.Col(dbc.Card(dbc.CardBody([html.H5("Rolls Produced"), html.H2(rolls_produced_total)])), width=2),
+            dbc.Col(info_box(total_events, "Total Events", "bg-success", "fas fa-list"), width=2),
+            dbc.Col(info_box(machine_count, "Machines", "bg-primary", "fas fa-cogs"), width=2),
+            dbc.Col(info_box(f"{overall_npt_percent}%", "Overall NPT %", "bg-warning", "fas fa-chart-pie"), width=2),
+            dbc.Col(info_box(f"{overall_pt_percent}%", "Overall PT %", "bg-secondary", "fas fa-percent"), width=2),
+            dbc.Col(info_box(rolls_produced_total, "Rolls Produced", "bg-danger", "fas fa-box"), width=2),
         ], className="mb-4"),
 
         # Charts
@@ -264,13 +294,7 @@ def update_dashboard(n):
 
         # Tables
         dbc.Row([
-            dbc.Col([
-                html.H5("Machine Performance Summary"),
-                tables["machine_summary_table"]
-            ], width=6),
-            dbc.Col([
-                html.H5("Shiftwise NPT Overview"),
-                tables["shift_summary_table"]
-            ], width=6)
+            dbc.Col(tables["machine_summary_table"], width=6),
+            dbc.Col(tables["shift_summary_table"], width=6)
         ], className="mb-4")
     ], fluid=True)
