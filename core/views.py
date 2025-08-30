@@ -447,6 +447,7 @@ def npt(request):
         'list_display': list_display,
         'default_sort': default_sort,
         'list_filter': list_filter,
+        'per_page' : 50,
     }
     
     return dynamic_view(request, 'core', 'ProcessedNPT', context)
@@ -461,6 +462,7 @@ def rotation(request):
         'list_display': list_display,
         'default_sort': default_sort,
         'list_filter': list_filter,
+        'per_page' : 50,
     }
     
     return dynamic_view(request, 'core', 'RotationStatus', context)
