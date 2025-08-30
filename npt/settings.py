@@ -28,7 +28,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG')
+DEBUG = os.getenv("DEBUG", "False").lower() in ("true", "1", "yes")
 
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '192.168.10.123', 'server.ocmsbd.com', 'npt.ocmsbd.com']
 
@@ -172,6 +172,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # List of paths that are allowed without authentication
 PUBLIC_PATHS = [
     '/login/', 
+    '/logout/',
     '/static/', 
     '/media/',
 ]

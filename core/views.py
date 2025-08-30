@@ -7,6 +7,27 @@ from core.utils.views import dynamic_view, dynamic_form_view, dynamic_delete_vie
 
 
 # Create your views here.
+def permission_denied_view(request, exception=None):
+    context = {
+        'status' : 403,
+        'title' : "403 - Forbidden"
+    }
+    return render(request, "core/403.html", context)
+
+def page_not_found_view(request, exception=None):
+    context = {
+        'status' : 404,
+        'title' : "404 - Page Not Found"
+    }
+    return render(request, "core/404.html", context)
+
+def server_error_view(request):
+    context = {
+        'status' : 500,
+        'title' : "500 - Server Error"
+    }
+    return render(request, "core/500.html", context)
+
 def menu(request):
     list_display = ('name', 'parent', 'url', 'order', 'permission',)
     default_sort = ['-parent', 'order']  # Default sorting by name ascending and created_at descending

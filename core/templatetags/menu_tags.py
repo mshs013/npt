@@ -2,6 +2,7 @@
 import os
 from django import template
 from django.utils.safestring import mark_safe
+from django.urls import resolve, Resolver404
 from django.core.cache import cache
 from django.conf import settings
 from core.models import Menu
@@ -32,49 +33,73 @@ def render_menu(context):
     return mark_safe(menu_html)
 
 def generate_menu_html(user):
-    # Prefetch children and permissions in one query
     top_level_menus = Menu.objects.filter(parent__isnull=True).select_related('permission').prefetch_related(
         'children__permission').order_by('order')
 
     menu_html = '<ul class="menu nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu">'
 
     for menu in top_level_menus:
-        if user_has_permission(user, menu):
-            menu_html += render_menu_item(menu, user)
+        menu_item_html = render_menu_item(menu, user)
+        if menu_item_html:  # only add if it has visible children or permission
+            menu_html += menu_item_html
 
     menu_html += "</ul>"
     return menu_html
 
 def render_menu_item(menu, user):
-    sub_menu_html = ""
-    angle_icon_html = ""
-    tree_class = ""
+    # Recursively render children
+    visible_children_html = ""
+    for sub_menu in menu.children.all().order_by("order"):
+        child_html = render_menu_item(sub_menu, user)
+        if child_html:
+            visible_children_html += child_html
 
-    if menu.children.exists():  # Avoid querying in a loop
-        sub_menu_html = "<ul class='nav nav-treeview'>"
-        for sub_menu in menu.children.all().order_by('order'):
-            if user_has_permission(user, sub_menu):
-                sub_menu_html += render_menu_item(sub_menu, user)
-        sub_menu_html += "</ul>"
-        angle_icon_html = '<i class="right fas fa-angle-left"></i>'
-        tree_class = 'has-treeview'
+     # Superuser sees all menus
+    if user.is_superuser:
+        has_permission = True
+    else:
+        # Determine if the menu is accessible
+        if menu.permission:
+            has_permission = user_has_permission(user, menu)
+        else:
+            # Try to resolve the menu URL to a view function
+            url = menu.get_absolute_url()
+            try:
+                match = resolve(url)
+                view_func = match.func
+                # Check if view has skip_permission attribute
+                has_permission = getattr(view_func, "_skip_permission", False)
+                print(has_permission)
+            except Resolver404:
+                has_permission = False
+
+    # Hide menu if no children are visible AND no permission
+    if not visible_children_html and not has_permission:
+        return ""
+
+    angle_icon_html = '<i class="right fas fa-angle-left"></i>' if visible_children_html else ""
+    tree_class = "has-treeview" if visible_children_html else ""
+
+    url = menu.get_absolute_url() if has_permission else "#"
 
     return f"""
         <li class='nav-item {tree_class}'>
-            <a href="{menu.get_absolute_url()}" class="nav-link">
+            <a href="{url}" class="nav-link">
                 <i class="nav-icon fas fa-{menu.icon}"></i> 
                 <p>
                     {menu.name}
                     {angle_icon_html}
                 </p>
             </a>
-            {sub_menu_html}
+            {visible_children_html}
         </li>
     """
 
 def user_has_permission(user, menu):
+    if not hasattr(user, "_cached_perms"):
+        user._cached_perms = user.get_all_permissions()
+
     if menu.permission:
         permission_code = f"{menu.permission.content_type.app_label}.{menu.permission.codename}"
-        # Use a cached permissions check to avoid querying in loops
-        return user.has_perm(permission_code)
-    return True  # If no permission is set, allow access
+        return permission_code in user._cached_perms
+    return True

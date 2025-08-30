@@ -112,7 +112,11 @@ class Menu(models.Model):
         return self.name
 
     def get_absolute_url(self):
-        return reverse(self.url) if self.url else "#"
+        from django.urls import reverse, NoReverseMatch
+        try:
+            return reverse(self.url)
+        except NoReverseMatch:
+            return "#"
 
     def has_children(self):
         return self.children.exists()
@@ -190,62 +194,6 @@ class NptReason(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
 
     def __str__(self):
         return self.name
-
-class ProcessedNPT(models.Model):
-    mc_no = models.CharField(max_length=50)
-    reason = models.ForeignKey(
-        NptReason,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-    )
-    off_time = models.DateTimeField()
-    on_time = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        verbose_name = "Processed NPT"
-        verbose_name_plural = "Processed NPT"
-        constraints = [
-            models.UniqueConstraint(fields=['mc_no', 'off_time'], name='unique_mc_off_time')
-        ]
-
-    def get_duration(self):
-        """
-        Returns duration as timedelta:
-        - If on_time exists: on_time - off_time
-        - Else: current time - off_time
-        """
-        now = datetime.now()  # naive
-        if self.on_time:
-            return self.on_time - self.off_time
-        return now - self.off_time
-
-    def __str__(self):
-        return f"{self.mc_no}"
-
-class RotationStatus(models.Model):
-    mc_no = models.CharField(max_length=50)
-    count = models.IntegerField()
-    count_time = models.DateTimeField()
-
-    class Meta:
-        verbose_name = "Rotation Status"
-        verbose_name_plural = "Rotation Status"
-        constraints = [
-            models.UniqueConstraint(fields=['mc_no', 'count_time'], name='unique_mc_count_time')
-        ]
-
-class ProcessorCursor(models.Model):
-    """
-    Stores the last processed timestamp for each Influx measurement
-    to prevent reprocessing the same records.
-    """
-    measurement = models.CharField(max_length=50, unique=True)
-    last_timestamp = models.DateTimeField(null=True, blank=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"{self.measurement} → {self.last_timestamp}"
     
 class Company(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
     name = models.CharField(max_length=150, unique=True)
@@ -362,4 +310,72 @@ class UserBlockPermission(models.Model):
 class UserMachinePermission(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     machines = models.ManyToManyField(Machine, blank=True)
+
+class ProcessedNPT(models.Model):
+    machine = models.ForeignKey(
+        Machine,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="processed_npts"
+    )
+    reason = models.ForeignKey(
+        NptReason,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+    off_time = models.DateTimeField()
+    on_time = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Processed NPT"
+        verbose_name_plural = "Processed NPT"
+        constraints = [
+            models.UniqueConstraint(fields=["machine", "off_time"], name="unique_machine_off_time")
+        ]
+
+    def get_duration(self):
+        """
+        Returns duration as timedelta:
+        - If on_time exists: on_time - off_time
+        - Else: current time - off_time
+        """
+        now = datetime.now()  # naive
+        if self.on_time:
+            return self.on_time - self.off_time
+        return now - self.off_time
+
+    def __str__(self):
+        return f"{self.mc_no}"
+
+class RotationStatus(models.Model):
+    machine = models.ForeignKey(
+        Machine,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="rotation_statuses"
+    )
+    count = models.IntegerField()
+    count_time = models.DateTimeField()
+
+    class Meta:
+        verbose_name = "Rotation Status"
+        verbose_name_plural = "Rotation Status"
+        constraints = [
+            models.UniqueConstraint(fields=["machine", "count_time"], name="unique_machine_count_time")
+        ]
+
+class ProcessorCursor(models.Model):
+    """
+    Stores the last processed timestamp for each Influx measurement
+    to prevent reprocessing the same records.
+    """
+    measurement = models.CharField(max_length=50, unique=True)
+    last_timestamp = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.measurement} → {self.last_timestamp}"
 

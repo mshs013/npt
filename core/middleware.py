@@ -6,6 +6,7 @@ from django.contrib.auth import logout
 from django.shortcuts import redirect
 from django.apps import apps
 from django.core.exceptions import PermissionDenied
+from django.utils.deprecation import MiddlewareMixin
 
 _thread_locals = threading.local()
 
@@ -70,43 +71,37 @@ class LoginRequiredMiddleware:
 # 3️⃣ Dynamic Permission Middleware
 # ---------------------------
 def skip_permission(view_func):
-    """Decorator to skip permission checks."""
+    """Decorator to skip permission check."""
     setattr(view_func, "_skip_permission", True)
     return view_func
 
-
-class DynamicPermissionMiddleware:
+class DynamicPermissionMiddleware(MiddlewareMixin):
     """
-    Middleware that dynamically checks permissions based on URL name.
-    - If URL name maps to a model: <action>_<modelname_lower> -> app_label.<action>_<modelname>
-    - If no model found: use URL name itself as permission codename
+    Middleware that dynamically checks permissions based on URL name,
+    and skips URLs listed in PUBLIC_PATHS.
     """
 
-    def __init__(self, get_response):
-        self.get_response = get_response
+    def process_view(self, request, view_func, view_args, view_kwargs):
+        url_name = getattr(request.resolver_match, 'url_name', None)
+        path = request.path
 
-    def __call__(self, request):
-        resolver_match = getattr(request, "resolver_match", None)
-        if resolver_match:
-            view_func = resolver_match.func
-            url_name = resolver_match.url_name
+        public_paths = getattr(settings, 'PUBLIC_PATHS', ['/login/', '/logout/', '/static/', '/media/'])
 
-            if not url_name or getattr(view_func, "_skip_permission", False):
-                return self.get_response(request)
+        # Skip public paths or decorated views
+        if not url_name or getattr(view_func, "_skip_permission", False) or any(path.startswith(p) for p in public_paths):
+            return None
 
-            perm_name = self.get_permission_from_url(url_name)
+        perm_name = self.get_permission_from_url(url_name)
 
-            if not request.user.is_superuser and not request.user.has_perm(perm_name):
-                raise PermissionDenied(f"You do not have permission: {perm_name}")
-
-        return self.get_response(request)
+        if not request.user.is_superuser and not request.user.has_perm(perm_name):
+            raise PermissionDenied(f"You do not have permission: {perm_name}")
 
     @staticmethod
     def get_permission_from_url(url_name: str) -> str:
         """
         Determine permission codename from URL name:
         - If URL name matches a model: <action>_<modelname_lower> -> app_label.<action>_<modelname>
-        - Otherwise: return URL name itself
+        - Otherwise: return custom permission with 'core' app
         """
         if "_" in url_name:
             action, model_str = url_name.split("_", 1)
@@ -116,8 +111,8 @@ class DynamicPermissionMiddleware:
                 model_name = model._meta.model_name
                 return f"{app_label}.{action}_{model_name}"
 
-        # If no model found, use URL name itself as permission codename
-        return url_name
+        # Custom permission (like 'home', 'report_npt')
+        return f"core.{url_name}"
 
     @staticmethod
     def get_model_by_lower_name(model_str):
@@ -125,3 +120,4 @@ class DynamicPermissionMiddleware:
             if model.__name__.lower() == model_str.lower():
                 return model
         return None
+
