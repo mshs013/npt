@@ -11,6 +11,7 @@ from django.db.models import Q, ForeignKey, CharField, ImageField, BooleanField,
 from django.core.files.images import ImageFile
 from datetime import datetime, date, time, timedelta
 from django.conf import settings
+from core.models import Block, Machine, UserBlockPermission, UserMachinePermission
 import os
 
 QUOTE_MAP = {i: "_%02X" % i for i in b'":/_#?;@&=+$,"[]<>%\n\\'}
@@ -611,3 +612,70 @@ def human_readable_time(value):
         parts.append(f"{seconds} sec")
 
     return " ".join(parts)
+
+def get_user_blocks(user):
+    """
+    Return a queryset of Block objects the user can view.
+    - Superusers see all.
+    - If the user has a block assignment, return those blocks.
+    """
+    if not user or not user.is_authenticated:
+        return Block.objects.none()
+    if user.is_superuser:
+        return Block.objects.all()
+
+    try:
+        return user.userblockpermission.blocks.all()
+    except UserBlockPermission.DoesNotExist:
+        return Block.objects.none()
+
+
+def get_user_machines(user):
+    """
+    Return a queryset of Machine objects the user can view.
+    - Superusers see all.
+    - If the user has any blocks assigned, machines are skipped.
+    - Otherwise, return the user's assigned machines.
+    """
+    if not user or not user.is_authenticated:
+        return Machine.objects.none()
+    if user.is_superuser:
+        return Machine.objects.all()
+
+    # Skip machines if blocks exist
+    try:
+        if user.userblockpermission.blocks.exists():
+            return Machine.objects.none()
+    except UserBlockPermission.DoesNotExist:
+        pass
+
+    try:
+        return user.usermachinepermission.machines.all()
+    except UserMachinePermission.DoesNotExist:
+        return Machine.objects.none()
+
+
+def user_has_machine(user, machine):
+    """
+    Returns True if the user can access the given machine.
+    - Respects the 'either blocks or machines' rule.
+    """
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+
+    machine_id = machine.id if hasattr(machine, "id") else machine
+
+    # If the user has blocks, check if the machine belongs to one of those blocks
+    try:
+        if user.userblockpermission.blocks.exists():
+            return Machine.objects.filter(id=machine_id, block__in=user.userblockpermission.blocks.all()).exists()
+    except UserBlockPermission.DoesNotExist:
+        pass
+
+    # Otherwise, check direct machine assignment
+    try:
+        return user.usermachinepermission.machines.filter(id=machine_id).exists()
+    except UserMachinePermission.DoesNotExist:
+        return False
