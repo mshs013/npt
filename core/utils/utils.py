@@ -11,7 +11,6 @@ from django.db.models import Q, ForeignKey, CharField, ImageField, BooleanField,
 from django.core.files.images import ImageFile
 from datetime import datetime, date, time, timedelta
 from django.conf import settings
-from core.models import Block, Machine, UserBlockPermission, UserMachinePermission
 import os
 
 QUOTE_MAP = {i: "_%02X" % i for i in b'":/_#?;@&=+$,"[]<>%\n\\'}
@@ -613,69 +612,90 @@ def human_readable_time(value):
 
     return " ".join(parts)
 
+
 def get_user_blocks(user):
     """
-    Return a queryset of Block objects the user can view.
-    - Superusers see all.
-    - If the user has a block assignment, return those blocks.
+    Get the list of Block objects a user can access.
+
+    Rules:
+        - Superusers have access to all blocks.
+        - Non-authenticated users have no access.
+        - Non-superusers only see blocks assigned to them via `UserBlockPermission`
+          (assuming `access_block_users` is the related_name for that relation).
+
+    Parameters:
+        user (User): Django user instance.
+
+    Returns:
+        QuerySet[Block]: Django queryset of accessible Block objects.
     """
+    Block = apps.get_model('core', 'Block')
     if not user or not user.is_authenticated:
         return Block.objects.none()
     if user.is_superuser:
         return Block.objects.all()
-
-    try:
-        return user.userblockpermission.blocks.all()
-    except UserBlockPermission.DoesNotExist:
-        return Block.objects.none()
+    return Block.objects.filter(access_block_users__user=user, access_block_users__can_view=True)
 
 
 def get_user_machines(user):
     """
-    Return a queryset of Machine objects the user can view.
-    - Superusers see all.
-    - If the user has any blocks assigned, machines are skipped.
-    - Otherwise, return the user's assigned machines.
+    Get the list of Machine objects a user can access.
+
+    Rules:
+        - Superusers have access to all machines.
+        - Non-authenticated users have no access.
+        - Non-superusers can access:
+            1. Machines directly assigned via `UserMachinePermission` (`access_machine_users`)
+            2. Machines belonging to blocks assigned via `UserBlockPermission`
+
+    Parameters:
+        user (User): Django user instance.
+
+    Returns:
+        QuerySet[Machine]: Django queryset of accessible Machine objects.
     """
+    Machine = apps.get_model('core', 'Machine')
+    UserMachinePermission = apps.get_model('core', 'UserMachinePermission')
+    UserBlockPermission = apps.get_model('core', 'UserBlockPermission')
+    Block = apps.get_model('core', 'Block')
+
     if not user or not user.is_authenticated:
         return Machine.objects.none()
     if user.is_superuser:
         return Machine.objects.all()
 
-    # Skip machines if blocks exist
-    try:
-        if user.userblockpermission.blocks.exists():
-            return Machine.objects.none()
-    except UserBlockPermission.DoesNotExist:
-        pass
+    direct = Machine.objects.filter(access_machine_users__user=user, access_machine_users__can_view=True)
+    via_blocks = Machine.objects.filter(block__access_block_users__user=user, block__access_block_users__can_view=True)
 
-    try:
-        return user.usermachinepermission.machines.all()
-    except UserMachinePermission.DoesNotExist:
-        return Machine.objects.none()
+    return (direct | via_blocks).distinct()
 
 
 def user_has_machine(user, machine):
     """
-    Returns True if the user can access the given machine.
-    - Respects the 'either blocks or machines' rule.
+    Check if a user has access to a specific Machine.
+
+    Parameters:
+        user (User): Django user instance.
+        machine (Machine or int): Machine instance or Machine ID.
+
+    Returns:
+        bool: True if user can access the machine, False otherwise.
+
+    Rules:
+        - Superusers always return True.
+        - Non-authenticated users always return False.
+        - Checks both:
+            1. Direct machine assignment via UserMachinePermission
+            2. Indirect assignment via UserBlockPermission
     """
+    UserMachinePermission = apps.get_model('core', 'UserMachinePermission')
+    UserBlockPermission = apps.get_model('core', 'UserBlockPermission')
+
     if not user or not user.is_authenticated:
         return False
     if user.is_superuser:
         return True
 
-    machine_id = machine.id if hasattr(machine, "id") else machine
-
-    # If the user has blocks, check if the machine belongs to one of those blocks
-    try:
-        if user.userblockpermission.blocks.exists():
-            return Machine.objects.filter(id=machine_id, block__in=user.userblockpermission.blocks.all()).exists()
-    except UserBlockPermission.DoesNotExist:
-        pass
-
-    # Otherwise, check direct machine assignment
-    try:
-        return user.usermachinepermission.machines.filter(id=machine_id).exists()
-    except UserMachinePermission.DoesNotExist:
-        return False
+    mid = machine.id if hasattr(machine, "id") else machine
+    return UserMachinePermission.objects.filter(user=user, machine_id=mid).exists() or \
+           UserBlockPermission.objects.filter(user=user, block__machine__id=mid).exists()
