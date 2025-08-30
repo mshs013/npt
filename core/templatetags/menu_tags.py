@@ -54,32 +54,34 @@ def render_menu_item(menu, user):
         if child_html:
             visible_children_html += child_html
 
-     # Superuser sees all menus
+    # Wrap children in <ul> if any
+    if visible_children_html:
+        visible_children_html = f"<ul class='nav nav-treeview'>{visible_children_html}</ul>"
+
+    # Determine if the menu is accessible
     if user.is_superuser:
         has_permission = True
     else:
-        # Determine if the menu is accessible
         if menu.permission:
             has_permission = user_has_permission(user, menu)
         else:
-            # Try to resolve the menu URL to a view function
             url = menu.get_absolute_url()
             try:
                 match = resolve(url)
                 view_func = match.func
-                # Check if view has skip_permission attribute
+                # Unwrap decorators
+                while hasattr(view_func, "__wrapped__"):
+                    view_func = view_func.__wrapped__
                 has_permission = getattr(view_func, "_skip_permission", False)
-                print(has_permission)
             except Resolver404:
                 has_permission = False
 
-    # Hide menu if no children are visible AND no permission
+    # Hide menu if no children AND no permission (for non-superuser)
     if not visible_children_html and not has_permission:
         return ""
 
     angle_icon_html = '<i class="right fas fa-angle-left"></i>' if visible_children_html else ""
     tree_class = "has-treeview" if visible_children_html else ""
-
     url = menu.get_absolute_url() if has_permission else "#"
 
     return f"""
