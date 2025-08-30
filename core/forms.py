@@ -323,25 +323,26 @@ class DynamicUserProfileForm(forms.ModelForm):
             profile.user_sign = self.cleaned_data.get('user_sign')
         profile.save()
 
-        # Save permissions
-        ubp, _ = UserBlockPermission.objects.get_or_create(user=user)
-        ump, _ = UserMachinePermission.objects.get_or_create(user=user)
+         # Save permissions (blocks/machines)
+        if commit:
+            ubp, _ = UserBlockPermission.objects.get_or_create(user=user)
+            ump, _ = UserMachinePermission.objects.get_or_create(user=user)
 
-        blocks = self.cleaned_data.get('blocks')
-        machines = self.cleaned_data.get('machines')
+            blocks = self.cleaned_data.get('blocks')
+            machines = self.cleaned_data.get('machines')
 
-        if blocks:
-            ubp.blocks.set(blocks)
-            ubp.save()
-            ump.machines.clear()
-        if machines:
-            ump.machines.set(machines)
-            ump.save()
-            ubp.blocks.clear()
+            if blocks:
+                ubp.blocks.set(blocks)
+                ubp.save()
+                ump.machines.clear()
+            if machines:
+                ump.machines.set(machines)
+                ump.save()
+                ubp.blocks.clear()
 
-        # Save groups and user permissions
-        user.groups.set(self.cleaned_data.get("groups"))
-        user.user_permissions.set(self.cleaned_data.get("user_permissions"))
+            # Save groups and user permissions
+            user.groups.set(self.cleaned_data.get("groups"))
+            user.user_permissions.set(self.cleaned_data.get("user_permissions"))
 
         return user
 

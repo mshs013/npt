@@ -145,8 +145,8 @@ class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     official_id = models.CharField(max_length=10, null=True, blank=True)
     contact_no = models.CharField(max_length=15, null=True, blank=True)
-    department = models.OneToOneField(Department, on_delete=models.CASCADE, null=True, blank=True, related_name='department')
-    designation = models.OneToOneField(Designation, on_delete=models.CASCADE, null=True, blank=True, related_name='designation')
+    department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True, related_name='profiles')
+    designation = models.ForeignKey(Designation, on_delete=models.SET_NULL, null=True, blank=True, related_name='profiles')
     user_img = models.ImageField(upload_to='user/img/', null=True, blank=True)
     user_sign = models.ImageField(upload_to='user/sign/', null=True, blank=True)
 

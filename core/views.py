@@ -63,9 +63,7 @@ def userForm(request, pk=None):
     if request.method == 'POST':
         form = DynamicUserProfileForm(request.POST, request.FILES, instance=instance)
         if form.is_valid():
-            user = form.save(commit=False)  # save User + Profile but not M2M yet
-            user.save()                     # now user has an ID
-            form.save_m2m()                 # now save blocks/machines relationships
+            form.save(commit=True)  # save User + Profile but not M2M yet
 
             messages.success(request, 'User saved successfully.')
             return redirect('view_user')
