@@ -4,7 +4,7 @@ from django.forms.widgets import CheckboxSelectMultiple
 from core.models import User
 from core.forms import DynamicUserProfileForm
 from core.utils.views import dynamic_view, dynamic_form_view, dynamic_delete_view, dynamic_trashed_view, dynamic_restore_view, dynamic_detail_view, dynamic_multiform_view
-
+from core.utils.utils import get_user_machines
 
 # Create your views here.
 def permission_denied_view(request, exception=None):
@@ -210,6 +210,43 @@ def reasonTrashed(request):
 
 def reasonRestore(request, pk):
     return dynamic_restore_view(request, 'core', 'NptReason', pk)
+
+def brand(request):
+    list_display = ('sl', 'name', 'created_by', 'created_at', 'updated_by', 'updated_at',)
+    default_sort = ['name']  # Default sorting by name ascending and created_at descending
+    list_filter = ('name',)  # Filters to include in the form
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+        'per_page': 15,
+    }
+    
+    return dynamic_view(request, 'core', 'Brand', context)
+
+def brandForm(request, pk=None):
+    fields = ('name',)  # Specify fields to include in the form
+    return dynamic_form_view(request, 'core', 'Brand', pk, fields)
+
+def brandDelete(request, pk):
+    return dynamic_delete_view(request, 'core', 'Brand', pk)
+
+def brandTrashed(request):
+    list_display = ('sl', 'name', 'deleted_by', 'deleted_at',)
+    default_sort = ['-deleted_at']  # Default sorting by name ascending and deleted_at descending
+    list_filter = ('name',)  # Filters to include in the form
+
+    context = {
+        'list_display': list_display,
+        'default_sort': default_sort,
+        'list_filter': list_filter,
+    }
+    
+    return dynamic_trashed_view(request, 'core', 'Brand', context)
+
+def brandRestore(request, pk):
+    return dynamic_restore_view(request, 'core', 'Brand', pk)
 
 def company(request):
     list_display = ('sl', 'name', 'created_by', 'created_at', 'updated_by', 'updated_at',)

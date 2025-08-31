@@ -38,6 +38,14 @@ urlpatterns = [
     path('reason/<int:pk>/restore/', views.reasonRestore, name='restore_nptreason'),
     path('npt/', views.npt, name='view_processednpt'),
     path('rotation/', views.rotation, name='view_rotationstatus'),
+    
+    ### Brand
+    path('brand/', views.brand, name='view_brand'),
+    path('brand/add/', views.brandForm, name='add_brand'),
+    path('brand/<int:pk>/change/', views.brandForm, name='change_brand'),
+    path('brand/<int:pk>/delete/', views.brandDelete, name='delete_brand'),
+    path('brand/trashed/', views.brandTrashed, name='trashed_brand'),
+    path('brand/<int:pk>/restore/', views.brandRestore, name='restore_brand'),
 
     ### Company
     path('company/', views.company, name='view_company'),

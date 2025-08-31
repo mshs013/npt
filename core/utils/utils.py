@@ -630,11 +630,18 @@ def get_user_blocks(user):
         QuerySet[Block]: Django queryset of accessible Block objects.
     """
     Block = apps.get_model('core', 'Block')
+    UserBlockPermission = apps.get_model('core', 'UserBlockPermission')
+
     if not user or not user.is_authenticated:
         return Block.objects.none()
     if user.is_superuser:
         return Block.objects.all()
-    return Block.objects.filter(access_block_users__user=user, access_block_users__can_view=True)
+
+    try:
+        perm = UserBlockPermission.objects.get(user=user)
+        return perm.blocks.all()
+    except UserBlockPermission.DoesNotExist:
+        return Block.objects.none()
 
 
 def get_user_machines(user):
@@ -657,15 +664,25 @@ def get_user_machines(user):
     Machine = apps.get_model('core', 'Machine')
     UserMachinePermission = apps.get_model('core', 'UserMachinePermission')
     UserBlockPermission = apps.get_model('core', 'UserBlockPermission')
-    Block = apps.get_model('core', 'Block')
 
     if not user or not user.is_authenticated:
         return Machine.objects.none()
     if user.is_superuser:
         return Machine.objects.all()
 
-    direct = Machine.objects.filter(access_machine_users__user=user, access_machine_users__can_view=True)
-    via_blocks = Machine.objects.filter(block__access_block_users__user=user, block__access_block_users__can_view=True)
+    # Direct machines
+    try:
+        direct_perm = UserMachinePermission.objects.get(user=user)
+        direct = direct_perm.machines.all()
+    except UserMachinePermission.DoesNotExist:
+        direct = Machine.objects.none()
+
+    # Via blocks
+    try:
+        block_perm = UserBlockPermission.objects.get(user=user)
+        via_blocks = Machine.objects.filter(block__in=block_perm.blocks.all())
+    except UserBlockPermission.DoesNotExist:
+        via_blocks = Machine.objects.none()
 
     return (direct | via_blocks).distinct()
 
@@ -690,6 +707,7 @@ def user_has_machine(user, machine):
     """
     UserMachinePermission = apps.get_model('core', 'UserMachinePermission')
     UserBlockPermission = apps.get_model('core', 'UserBlockPermission')
+    Machine = apps.get_model('core', 'Machine')
 
     if not user or not user.is_authenticated:
         return False
@@ -697,5 +715,13 @@ def user_has_machine(user, machine):
         return True
 
     mid = machine.id if hasattr(machine, "id") else machine
-    return UserMachinePermission.objects.filter(user=user, machine_id=mid).exists() or \
-           UserBlockPermission.objects.filter(user=user, block__machine__id=mid).exists()
+
+    # Direct
+    if UserMachinePermission.objects.filter(user=user, machines__id=mid).exists():
+        return True
+
+    # Via blocks
+    if UserBlockPermission.objects.filter(user=user, blocks__machine__id=mid).exists():
+        return True
+
+    return False

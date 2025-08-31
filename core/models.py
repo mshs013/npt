@@ -195,6 +195,20 @@ class NptReason(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
     def __str__(self):
         return self.name
     
+class Brand(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
+    name = models.CharField(max_length=150, unique=True)
+
+    class Meta:
+        verbose_name = "Brand"
+        verbose_name_plural = "Brands"
+        permissions = [
+            ("trashed_brand", "Can view trashed Brand"),
+            ("restore_brand", "Can view restore Brand"),
+        ]
+
+    def __str__(self):
+        return f"{self.name}"
+    
 class Company(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
     name = models.CharField(max_length=150, unique=True)
 
@@ -276,8 +290,8 @@ class Machine(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
 
     mc_no = models.CharField(max_length=50, unique=True)
     device_mc = MACAddressField(null=True, blank=True)
-    brand = models.CharField(max_length=100)
-    model = models.CharField(max_length=100)
+    brand = models.ForeignKey(Brand, null=True, blank=True, on_delete=models.SET_NULL)
+    model = models.CharField(max_length=100, null=True, blank=True)
     category = models.CharField(max_length=1, choices=MC_CATEGORY, default="C")
     dia = models.IntegerField(null=True, blank=True)
     feeder = models.IntegerField(null=True, blank=True)
