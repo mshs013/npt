@@ -1,0 +1,363 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block content_title %}Rotation Counter{% endblock %}
+
+{% block content_breadcrumb %}
+    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Home</a></li>
+    <li class="breadcrumb-item active">Rotation Counter</li>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.filter-panel-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+
+.chart-title {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 15px 20px;
+    margin: 0;
+    font-weight: 600;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.filter-panel {
+    padding: 20px;
+}
+
+.filter-row {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.filter-group {
+    flex: 1;
+    min-width: 200px;
+}
+
+.filter-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: #333;
+}
+
+.form-control {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.filter-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.btn-primary {
+    background: #007bff;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #0056b3;
+}
+
+.btn-default {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-default:hover {
+    background: #545b62;
+}
+
+.table-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 30px;
+    overflow: hidden;
+}
+
+.table-responsive {
+    overflow-x: auto;
+}
+
+.performance-table {
+    width: 100%;
+    margin: 0;
+    border-collapse: collapse;
+}
+
+.performance-table th {
+    background: #f8f9fa;
+    color: #495057;
+    font-weight: 600;
+    padding: 12px;
+    text-align: left;
+    border: 1px solid #dee2e6;
+}
+
+.performance-table td {
+    padding: 10px 12px;
+    border: 1px solid #dee2e6;
+    vertical-align: middle;
+}
+
+.performance-table tbody tr:hover {
+    background: #f8f9fa;
+}
+
+.performance-table tfoot td {
+    background: #e9ecef;
+    font-weight: bold;
+}
+
+.download-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.toggle-filters-button {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+
+.toggle-filters-button:hover {
+    background: #218838;
+}
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <!-- Filter Panel -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-filter"></i> Filter Options
+                </h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <form method="GET" action="{% url 'view_rotationcounter' %}">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="machine">Machine:</label>
+                                <select class="form-control" name="machine" id="machine">
+                                    <option value="">All Machines</option>
+                                    {% for mc_no in filter_machines %}
+                                        <option value="{{ mc_no }}" {% if selected_machine == mc_no %}selected{% endif %}>
+                                            {{ mc_no }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="date_from">From Date:</label>
+                                <input type="date" class="form-control" name="date_from" id="date_from" value="{{ date_from }}">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="date_to">To Date:</label>
+                                <input type="date" class="form-control" name="date_to" id="date_to" value="{{ date_to }}">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label>&nbsp;</label>
+                                <div>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-search"></i> Apply Filters
+                                    </button>
+                                    <a href="{% url 'view_rotationcounter' %}" class="btn btn-secondary">
+                                        <i class="fas fa-undo"></i> Reset
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <!-- Machine Wise Summary -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-chart-bar"></i> Machine Wise Roll Summary
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-bordered">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Machine No</th>
+                                <th>Avg RPM</th>
+                                <th>NPT (min)</th>
+                                <th>Total Rolls</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for machine in machine_wise_summary %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td>{{ machine.mc_no }}</td>
+                                <td>{{ machine.avg_rpm }}</td>
+                                <td>{{ machine.npt_minutes|floatformat:2 }}</td>
+                                <td>{{ machine.total_rolls }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center">No data available</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="bg-light">
+                                <td colspan="4" class="text-right font-weight-bold">Total Rolls:</td>
+                                <td class="font-weight-bold">{{ total_rolls }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <!-- Intermediary Roll Data -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-list"></i> Intermediary Roll Data
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Serial No</th>
+                                <th>Machine No</th>
+                                <th>Roll No</th>
+                                <th>Start Time</th>
+                                <th>End Time</th>
+                                <th>Total Count</th>
+                                <th>NPT (min)</th>
+                                <th>Avg RPM</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in intermediary_data %}
+                            <tr>
+                                <td>{{ item.serial_no }}</td>
+                                <td>{{ item.mc_no }}</td>
+                                <td>{{ item.roll_no }}</td>
+                                <td>{{ item.start_time|date:"Y-m-d H:i:s" }}</td>
+                                <td>{{ item.end_time|date:"Y-m-d H:i:s" }}</td>
+                                <td>{{ item.total_count }}</td>
+                                <td>{{ item.npt_minutes }}</td>
+                                <td>{{ item.avg_rpm }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="8" class="text-center">No data available</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <!-- Rotation Counter Log -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-clipboard-list"></i> Rotation Counter Log
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Serial No</th>
+                                <th>Machine No</th>
+                                <th>Count Time</th>
+                                <th>Count No</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in rotation_log %}
+                            <tr>
+                                <td>{{ log.serial_no }}</td>
+                                <td>{{ log.mc_no }}</td>
+                                <td>{{ log.count_time|date:"Y-m-d H:i:s" }}</td>
+                                <td>{{ log.count_no }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center">No data available</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,311 @@
+<!-- library/templates/library/mclogs.html -->
+{% extends "core/base.html" %}
+
+{% block content_title %}Machine Logs{% endblock %}
+
+{% block content_breadcrumb %}
+    <li class="breadcrumb-item"><a href="#">Home</a></li>
+    <li class="breadcrumb-item active">Machine Logs</li>
+{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<!-- Filter Panel -->
+<div style="display: flex; justify-content: end;">
+    <button class="btn btn-secondary" onclick="toggleFilters()">
+        <i class="bi bi-funnel"></i> <span id="toggleText">Hide Filters</span>
+    </button>
+</div>
+
+<div class="card" id="filterPanelCard">
+    <div class="card-header">
+        <h3 class="card-title"><i class="bi bi-filter-circle"></i> Filter Options</h3>
+    </div>
+    <div class="card-body">
+        <form method="GET" id="filterForm">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="machine">Machine:</label>
+                        <select class="form-control" name="machine" id="machine">
+                            <option value="">All Machines</option>
+                            {% for machine in filter_machines %}
+                                <option value="{{ machine.id }}" {% if request.GET.machine == machine|stringformat:'s' %}selected{% endif %}>
+                                    {{ machine.mc_no }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="reason">Reason:</label>
+                        <select class="form-control" name="reason" id="reason">
+                            <option value="">All Reasons</option>
+                            {% for reason in filter_reasons %}
+                                <option value="{{ reason.id }}" {% if request.GET.reason == reason.id|stringformat:'s' %}selected{% endif %}>
+                                    {{ reason.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="shift">Shift:</label>
+                        <select class="form-control" name="shift" id="shift">
+                            <option value="">All Shifts</option>
+                            {% for shift in filter_shifts %}
+                                <option value="{{ shift.id }}" {% if request.GET.shift == shift.id|stringformat:'s' %}selected{% endif %}>
+                                    {{ shift }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="date_from">From Date:</label>
+                        <input type="datetime-local" class="form-control" name="date_from" id="date_from" 
+                               value="{{ request.GET.date_from|default:'' }}">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="date_to">To Date:</label>
+                        <input type="datetime-local" class="form-control" name="date_to" id="date_to" 
+                               value="{{ request.GET.date_to|default:'' }}">
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
+                <button type="submit" class="btn btn-primary">Apply Filters</button>
+                <a href="{% url 'view_mclog' %}" class="btn btn-secondary">Reset Filters</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Machine Wise NPT Summary Table -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="bi bi-bar-chart-steps"></i> Machine Wise NPT Summary
+            {% if current_shift %}({{ current_shift }}){% endif %}
+        </h3>
+    </div>
+    <div class="card-body">
+        {% if machines %}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover table-bordered">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Machine</th>
+                        {% for reason in reasons %}
+                            <th>{{ reason.name }} ({{ reason.count }})</th>
+                        {% endfor %}
+                        <th>Total NPT ({{total_reason_counts}})</th>
+                        <th>NPT (%)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for machine in machines %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ machine.name }}</td>
+                        {% for reason in reasons %}
+                            <td>
+                                {% for machine_reason in machine.reasons %}
+                                    {% if machine_reason.name == reason.name %}
+                                        {{ machine_reason.duration }} 
+                                    {% endif %}
+                                {% empty %}
+                                    0.00 min.00 min
+                                {% endfor %}
+                            </td>
+                        {% endfor %}
+                        <td>
+                            {{machine.total_npt}} 
+                        </td>
+                        <td>
+                           {{machine.npt_percentage}} %
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="table-secondary">
+                        <td colspan="{{ footer_colspan }}">Total</td>
+                        <td>{{ total_npt_all }} </td>
+                        <td>-</td>
+                    </tr>
+            </tfoot>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i>
+            No NPT summary data available for selected filters.
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Machine NPT Log Table -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="bi bi-card-list"></i> Machine NPT Log
+            {% if current_shift %}({{ current_shift }}){% endif %}
+        </h3>
+        <div class="card-tools">
+            <button class="btn btn-primary btn-sm" onclick="downloadExcel()">
+                <i class="bi bi-file-earmark-excel"></i> Export Excel
+            </button>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if npt_data %}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover table-bordered" id="nptTable">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Machine</th>
+                        <th>Reason</th>
+                        <th>Off Time</th>
+                        <th>On Time</th>
+                        <th>Duration (min)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in npt_data %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ record.machine }}</td>
+                        <td>{{ record.reason }}</td>
+                        <td>{{ record.offTime|date:"M d, Y H:i" }}</td>
+                        <td>
+                            {% if record.onTime %}
+                                {{ record.onTime|date:"M d, Y H:i" }}
+                            {% else %}
+                                <span class="text-muted">Still off</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ record.duration|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i>
+            No NPT records found for selected filters.
+        </div>
+        {% endif %}
+    </div>
+    <div class="card-footer">
+        <small class="text-muted">
+            Total records: {{ npt_data|length }}
+            {% if filtered_count %}| Filtered from {{ total_count }} total records{% endif %}
+        </small>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+function toggleFilters() {
+    const filterCard = document.getElementById('filterPanelCard');
+    const toggleText = document.getElementById('toggleText');
+    
+    if (filterCard.style.display === 'none') {
+        filterCard.style.display = 'block';
+        toggleText.textContent = 'Hide Filters';
+    } else {
+        filterCard.style.display = 'none';
+        toggleText.textContent = 'Show Filters';
+    }
+}
+
+function downloadExcel() {
+    const table = document.getElementById('nptTable');
+    
+    // Check if table exists and has data
+    if (!table) {
+        alert('No table found to export!');
+        return;
+    }
+    
+    const rows = table.querySelectorAll('tbody tr');
+    if (rows.length === 0) {
+        alert('No data to export! Please adjust your filters.');
+        return;
+    }
+    
+    try {
+        // Create workbook from table
+        const wb = XLSX.utils.table_to_book(table, {
+            sheet: "NPT_Logs",
+            raw: true,
+            cellStyles: true
+        });
+        
+        // Get the worksheet
+        const ws = wb.Sheets["NPT_Logs"];
+        console.log(ws)
+        // Set column widths to prevent ##### display
+        const colWidths = [
+            { wch: 5 },   // # column
+            { wch: 30 },  // Machine column
+            { wch: 20 },  // Reason column
+            { wch: 20 },  // Off Time column
+            { wch: 20 },  // On Time column
+            { wch: 15 }   // Duration column
+        ];
+        ws['!cols'] = colWidths;
+        
+        // Generate filename with current date
+        const now = new Date();
+        const dateStr = now.getFullYear() + '-' + 
+                       String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+                       String(now.getDate()).padStart(2, '0');
+        const filename = `npt_logs_${dateStr}.xlsx`;
+        
+        // Download the file
+        XLSX.writeFile(wb, filename);
+        
+        console.log('Excel file downloaded successfully with proper column widths!');
+    } catch (error) {
+        console.error('Error creating Excel file:', error);
+        alert('Error creating Excel file. Please try again.');
+    }
+}
+
+// Set default datetime values on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const now = new Date();
+    const today = now.toISOString().slice(0, 16); // Current date and time
+    const startOfDay = now.toISOString().slice(0, 10) + 'T00:00'; // Start of current day
+    
+    const dateFrom = document.getElementById('date_from');
+    const dateTo = document.getElementById('date_to');
+
+    // Add 6 hours to "now"
+    const plus6Hours = new Date(now.getTime() + 6 * 60 * 60 * 1000);
+    const plus6HoursISO = plus6Hours.toISOString().slice(0, 16);
+    
+    // Set default values only if no values are present
+    if (dateFrom && !dateFrom.value) {
+        dateFrom.value = startOfDay;
+    }
+    if (dateTo && !dateTo.value) {
+        dateTo.value = plus6HoursISO;
+    }
+});
+
+</script>
+{% endblock %}

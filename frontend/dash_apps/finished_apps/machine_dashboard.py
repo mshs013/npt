@@ -11,7 +11,7 @@ import pandas as pd
 import plotly.express as px
 
 
-app = DjangoDash("MachineDashboard", serve_locally=True)
+app = DjangoDash("MachineDashboard", serve_locally=False)
 
 # ---------------------
 # AdminLTE Info Box
@@ -95,7 +95,7 @@ def generate_dashboard_data(user=None):
     npt_df = pd.DataFrame([{
         "machine_id": npt.machine.id if npt.machine else None,
         "machine_label": f"{npt.machine.mc_no}" if npt.machine else "Unknown",
-        "reason": npt.reason.name if npt.reason else "Unknown",
+        "reason": npt.reason.name if npt.reason else "N/A",
         "off_time": npt.off_time,
         "on_time": npt.on_time
     } for npt in npt_qs])

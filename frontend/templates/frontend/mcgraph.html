@@ -1,0 +1,611 @@
+<!-- core/templates/core/dashboard.html -->
+{% extends "core/base.html" %}
+
+{% block content_title %}NPT Timeline Chart{% endblock %}
+
+{% block content_breadcrumb %}
+    <li class="breadcrumb-item"><a href="#">Home</a></li>
+    <li class="breadcrumb-item active">Dashboard</li>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.chart-container {
+    width: 100%;
+    overflow-x: auto;
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 0 10px;
+}
+
+.chart-title {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #333;
+}
+
+.current-time {
+    font-size: 1.2rem;
+    color: #666;
+    font-weight: 500;
+}
+
+.settings-toggle {
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+    color: #666;
+}
+
+.settings-toggle:hover {
+    background-color: #f0f0f0;
+}
+
+.settings-panel {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1000;
+    min-width: 250px;
+    display: none;
+}
+
+.settings-panel.active {
+    display: block;
+}
+
+.settings-section h3 {
+    margin-bottom: 10px;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.checkbox-group {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #eee;
+    border-radius: 4px;
+    padding: 10px;
+}
+
+.checkbox-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    padding: 4px 0;
+}
+
+.checkbox-item input[type="checkbox"] {
+    margin-right: 8px;
+}
+
+.checkbox-item label {
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.reset-button {
+    background: #dc3545;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 15px;
+    width: 100%;
+}
+
+.reset-button:hover {
+    background: #c82333;
+}
+
+.tooltip {
+    position: absolute;
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    pointer-events: none;
+    z-index: 1000;
+    max-width: 250px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.axis {
+    font-size: 12px;
+}
+
+.axis path,
+.axis line {
+    fill: none;
+    stroke: #333;
+    shape-rendering: crispEdges;
+}
+
+.bar {
+    cursor: pointer;
+}
+
+.legend {
+    font-size: 12px;
+}
+
+#timeline-chart {
+    min-height: 450px;
+    overflow-x: auto;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <div class="chart-header">
+            <h3 class="chart-title">NPT Timeline Chart</h3>
+            <div style="display: flex; align-items: center; gap: 20px; position: relative;">
+                <div class="current-time" id="currentTime"></div>
+                <div class="settings-toggle" id="settingsToggle">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </div>
+                <div class="settings-panel" id="settingsPanel">
+                    <div class="settings-section">
+                        <h3>Select Machines</h3>
+                        <div class="checkbox-group" id="machine-checkboxes"></div>
+                    </div>
+                    <div class="settings-actions">
+                        <button class="reset-button" id="resetButton">Reset to Default</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="chart-container">
+            <div id="timeline-chart"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+// Global variables
+let selectedMachines = new Set();
+let chartData = [];
+let allMachines = [];
+
+// Configuration
+const CONFIG = {
+    charts: {
+        margin: { top: 20, right: 150, bottom: 40, left: 100 },
+        width: 1200,
+        minHeight: 450,
+        heightPerMachine: 30,
+        barHeight: 15
+    },
+    refreshInterval: 60000, // 1 minute
+    colors: {
+        machineOn: "#00e600",
+        machineOff: "#ff1a1a",
+        reasons: {
+            "Maintenance": "#0040ff",
+            "Needle Breakage": "#FFA999",
+            "No Order / No Program": "#99cf99",
+            "No Yarn": "#FFdc99",
+            "Power": "#11EEEE",
+            "Program Change": "#ccFFcc",
+            "Roll Cutting": "#FFFFAA",
+            "Yarn Breakage": "#FF22FF",
+            "N/A": "#ff1a1a",
+            "No operation data": "#FFAACC"
+        }
+    }
+};
+
+// Utility functions
+function formatSeconds(seconds) {
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+
+    let result = [];
+    if (days > 0) result.push(`${days}d`);
+    if (hours > 0) result.push(`${hours}h`);
+    if (minutes > 0) result.push(`${minutes}min`);
+    if (secs > 0) result.push(`${secs}sec`);
+    return result.join(' ') || '0sec';
+}
+
+function getCurrentTimeInSeconds() {
+    const now = new Date();
+    const startOfToday = new Date(now);
+    startOfToday.setHours(0, 0, 0, 0);
+    return Math.floor((now - startOfToday) / 1000);
+}
+
+function formatDateTime(date) {
+    return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+}
+
+function updateCurrentTime() {
+    document.getElementById("currentTime").textContent = "Running Time: " + formatSeconds(getCurrentTimeInSeconds());
+}
+
+function createTooltip(content, event) {
+    d3.selectAll('.tooltip').remove();
+    
+    const tooltip = d3.select('body')
+        .append('div')
+        .attr('class', 'tooltip')
+        .style('opacity', 0);
+
+    tooltip.html(content)
+        .style('left', (event.pageX + 10) + 'px')
+        .style('top', (event.pageY - 10) + 'px')
+        .transition()
+        .duration(200)
+        .style('opacity', 1);
+
+    const tooltipNode = tooltip.node();
+    const rect = tooltipNode.getBoundingClientRect();
+    
+    if (rect.right > window.innerWidth) {
+        tooltip.style('left', (event.pageX - rect.width - 10) + 'px');
+    }
+    
+    if (rect.top < 0) {
+        tooltip.style('top', (event.pageY + 10) + 'px');
+    }
+}
+
+// Data processing
+function processNPTData(nptData) {
+    const processedData = [];
+    const currentTime = new Date();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
+    // Group data by machine
+    const machineGroups = {};
+    nptData.forEach(record => {
+        if (!machineGroups[record.machine_name]) {
+            machineGroups[record.machine_name] = [];
+        }
+        machineGroups[record.machine_name].push(record);
+    });
+
+    // Process each machine
+    Object.keys(machineGroups).forEach(machineName => {
+        const machineData = { machine: machineName, periods: [] };
+        const records = machineGroups[machineName].sort((a, b) => new Date(a.off_time) - new Date(b.off_time));
+        
+        let lastTime = today;
+        let isRunning = true; // Assume machine starts running
+
+        // Add initial running period if first record starts after today's start
+        if (records.length > 0) {
+            const firstRecord = new Date(records[0].off_time);
+            if (firstRecord > today) {
+                machineData.periods.push({
+                    status: "Machine On",
+                    start: today,
+                    end: firstRecord,
+                    duration: (firstRecord - today) / 1000,
+                    reason: "Running"
+                });
+                lastTime = firstRecord;
+                isRunning = false;
+            }
+        }
+
+        // Process NPT records
+        records.forEach(record => {
+            const offTime = new Date(record.off_time);
+            const onTime = record.on_time ? new Date(record.on_time) : currentTime;
+            
+            // Only process records within today
+            if (offTime <= endOfToday) {
+                // Add running period before this NPT if needed
+                if (isRunning && offTime > lastTime) {
+                    machineData.periods.push({
+                        status: "Machine On",
+                        start: lastTime,
+                        end: offTime,
+                        duration: (offTime - lastTime) / 1000,
+                        reason: "Running"
+                    });
+                }
+
+                // Add NPT period
+                const nptEnd = onTime > endOfToday ? endOfToday : onTime;
+                machineData.periods.push({
+                    status: "Machine Off",
+                    start: offTime,
+                    end: nptEnd,
+                    duration: (nptEnd - offTime) / 1000,
+                    reason: record.reason_name || "N/A"
+                });
+
+                lastTime = onTime;
+                isRunning = record.on_time !== null; // If on_time is null, machine is still off
+            }
+        });
+
+        // Add final period if machine is running and we haven't reached end of day
+        if (isRunning && lastTime < endOfToday) {
+            const finalEnd = currentTime < endOfToday ? currentTime : endOfToday;
+            machineData.periods.push({
+                status: "Machine On",
+                start: lastTime,
+                end: finalEnd,
+                duration: (finalEnd - lastTime) / 1000,
+                reason: "Running"
+            });
+        }
+
+        processedData.push(machineData);
+    });
+
+    return processedData;
+}
+
+// Chart rendering
+function renderChart(data) {
+    const filteredData = selectedMachines.size > 0 ? 
+        data.filter(d => selectedMachines.has(d.machine)) : data;
+
+    document.getElementById('timeline-chart').innerHTML = '';
+    d3.selectAll('.tooltip').remove();
+
+    const totalHeight = Math.max(CONFIG.charts.minHeight, filteredData.length * CONFIG.charts.heightPerMachine);
+    const width = CONFIG.charts.width - CONFIG.charts.margin.left - CONFIG.charts.margin.right;
+    const height = totalHeight - CONFIG.charts.margin.top - CONFIG.charts.margin.bottom;
+
+    const svg = d3.select('#timeline-chart')
+        .append('svg')
+        .attr('width', CONFIG.charts.width)
+        .attr('height', totalHeight)
+        .append('g')
+        .attr('transform', `translate(${CONFIG.charts.margin.left},${CONFIG.charts.margin.top})`);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
+    const x = d3.scaleTime()
+        .domain([today, endOfToday])
+        .range([0, width]);
+
+    const y = d3.scaleBand()
+        .domain(filteredData.map(d => d.machine))
+        .range([0, height])
+        .padding(0.2);
+
+    // Draw periods for each machine
+    filteredData.forEach(machine => {
+        const machineGroup = svg.append("g")
+            .attr("class", "machine-group")
+            .attr("transform", `translate(0,${y(machine.machine) + (y.bandwidth() - CONFIG.charts.barHeight) / 2})`);
+
+        machineGroup.selectAll("rect")
+            .data(machine.periods)
+            .join("rect")
+            .attr("x", d => x(d.start))
+            .attr("width", d => Math.max(1, x(d.end) - x(d.start)))
+            .attr("height", CONFIG.charts.barHeight)
+            .attr("fill", d => {
+                if (d.status === "Machine On") return CONFIG.colors.machineOn;
+                return CONFIG.colors.reasons[d.reason] || CONFIG.colors.machineOff;
+            })
+            .attr("class", "bar")
+            .on("mouseover", function(event, d) {
+                d3.select(this)
+                    .transition()
+                    .duration(200)
+                    .attr('opacity', 0.8)
+                    .attr('stroke', '#333')
+                    .attr('stroke-width', 2);
+                    
+                let tooltipContent = `
+                    <strong>Machine: ${machine.machine}</strong><br/>
+                    Status: <span style="color: ${d.status === 'Machine On' ? CONFIG.colors.machineOn : CONFIG.colors.machineOff}">${d.status}</span><br/>
+                    Start: ${formatDateTime(d.start)}<br/>
+                    End: ${formatDateTime(d.end)}<br/>
+                    Duration: ${formatSeconds(d.duration)}
+                `;
+                if (d.status === "Machine Off") {
+                    tooltipContent += `<br/>Reason: <span style="color: #ffcc00">${d.reason}</span>`;
+                }
+                createTooltip(tooltipContent, event);
+            })
+            .on("mouseout", function() {
+                d3.select(this)
+                    .transition()
+                    .duration(200)
+                    .attr('opacity', 1)
+                    .attr('stroke', 'none');
+                d3.selectAll(".tooltip").remove();
+            });
+    });
+
+    // Add axes
+    const xAxis = d3.axisBottom(x)
+        .ticks(d3.timeHour.every(2))
+        .tickFormat(d3.timeFormat("%H:%M"));
+
+    const yAxis = d3.axisLeft(y);
+
+    svg.append("g")
+        .attr("class", "axis")
+        .attr("transform", `translate(0,${height})`)
+        .call(xAxis);
+
+    const yAxisG = svg.append("g")
+        .attr("class", "axis")
+        .call(yAxis);
+
+    // Add status indicators (circles) to y-axis
+    yAxisG.selectAll(".tick line").remove();
+    yAxisG.selectAll(".tick")
+        .append("circle")
+        .attr("cx", -5)
+        .attr("r", 3)
+        .attr("fill", function(machineName) {
+            const machineData = filteredData.find(d => d.machine === machineName);
+            const lastPeriod = machineData?.periods.at(-1);
+            if (lastPeriod?.status === "Machine On") {
+                return CONFIG.colors.machineOn;
+            } else if (lastPeriod?.status === "Machine Off") {
+                return CONFIG.colors.reasons[lastPeriod.reason] || CONFIG.colors.machineOff;
+            }
+            return '#333';
+        });
+
+    // Add axis labels
+    svg.append("text")
+        .attr("x", width / 2)
+        .attr("y", height + 35)
+        .attr("text-anchor", "middle")
+        .style("font-size", "12px")
+        .text("Time of Day");
+
+    // Add legend
+    const legend = svg.append("g")
+        .attr("class", "legend")
+        .attr("transform", `translate(${width + 20}, 0)`);
+
+    const legendItems = [
+        { label: "Machine On", color: CONFIG.colors.machineOn },
+        ...Object.entries(CONFIG.colors.reasons).map(([reason, color]) => ({ label: reason, color }))
+    ];
+
+    legendItems.forEach((item, i) => {
+        const legendGroup = legend.append("g")
+            .attr("transform", `translate(0, ${i * 18})`);
+
+        legendGroup.append("rect")
+            .attr("width", 12)
+            .attr("height", 12)
+            .attr("fill", item.color);
+
+        legendGroup.append("text")
+            .attr("x", 16)
+            .attr("y", 9)
+            .text(item.label)
+            .style("font-size", "11px");
+    });
+}
+
+// Settings functionality
+function initializeSettings() {
+    const settingsToggle = document.getElementById('settingsToggle');
+    const settingsPanel = document.getElementById('settingsPanel');
+    const resetButton = document.getElementById('resetButton');
+
+    settingsToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (chartData.length > 0) {
+            settingsPanel.classList.toggle('active');
+        }
+    });
+
+    resetButton.addEventListener('click', () => {
+        selectedMachines.clear();
+        updateMachineCheckboxes();
+        renderChart(chartData);
+        settingsPanel.classList.remove('active');
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!settingsPanel.contains(e.target) && !settingsToggle.contains(e.target)) {
+            settingsPanel.classList.remove('active');
+        }
+    });
+}
+
+function updateMachineCheckboxes() {
+    const container = document.getElementById('machine-checkboxes');
+    container.innerHTML = '';
+
+    allMachines.forEach(machine => {
+        const checkbox = document.createElement('div');
+        checkbox.className = 'checkbox-item';
+        checkbox.innerHTML = `
+            <input type="checkbox" id="machine-${machine}" ${selectedMachines.has(machine) ? 'checked' : ''}>
+            <label for="machine-${machine}">${machine}</label>
+        `;
+        checkbox.querySelector('input').addEventListener('change', (e) => {
+            if (e.target.checked) {
+                selectedMachines.add(machine);
+            } else {
+                selectedMachines.delete(machine);
+            }
+            renderChart(chartData);
+        });
+        container.appendChild(checkbox);
+    });
+}
+
+// Data fetching
+async function fetchNPTData() {
+    try {
+        const response = await fetch('/lib/api/mcgraph/');
+        if (!response.ok) throw new Error('Network response was not ok');
+        
+        const data = await response.json();
+        chartData = processNPTData(data.npt);
+        allMachines = [...new Set(data.npt.map(r => r.machine_name))];
+        
+        updateMachineCheckboxes();
+        renderChart(chartData);
+    } catch (error) {
+        console.error('Error fetching NPT data:', error);
+        // Show error message to user
+        document.getElementById('timeline-chart').innerHTML = 
+            '<div style="text-align: center; padding: 50px; color: #666;">Error loading chart data. Please try again.</div>';
+    }
+}
+
+// Initialize everything
+document.addEventListener('DOMContentLoaded', function() {
+    updateCurrentTime();
+    setInterval(updateCurrentTime, 1000);
+    
+    initializeSettings();
+    fetchNPTData();
+    
+    // Auto-refresh data every minute
+    setInterval(fetchNPTData, CONFIG.refreshInterval);
+});
+</script>
+{% endblock %}
