@@ -144,8 +144,11 @@ def dynamic_view(request, app_name, model_name, context):
         search_fields = list_filter
         query_filters &= apply_search(model, search_query, search_fields)
 
+    # Add pre_filter if provided
+    pre_filter = context.get("pre_filter", {})
+
     # Build the queryset with select_related and prefetch_related
-    queryset = model.objects.filter(query_filters)
+    queryset = model.objects.filter(query_filters, **pre_filter)
 
     # Get the related fields for your model
     select_related_fields, prefetch_related_fields = get_related_fields(model, list_display)

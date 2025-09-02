@@ -314,7 +314,7 @@ class Machine(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
         ]
 
     def __str__(self):
-        return f"{self.brand} - {self.model} - {self.mc_no}"
+        return f"{self.mc_no}"
 
 # Object-level user permissions
 class UserBlockPermission(models.Model):

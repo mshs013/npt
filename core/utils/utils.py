@@ -575,10 +575,14 @@ def url_name_exists(url_name, **kwargs):
 def human_readable_time(value):
     """
     Convert a timedelta or string 'H:MM:SS.micro' into a human-readable string.
+    Supports years, months, days, hours, minutes, seconds.
+    
     Examples:
         0:00:46.060000 -> "46 sec"
         0:03:15 -> "3 min 15 sec"
         1:02:30 -> "1 hr 2 min 30 sec"
+        2 days, 3:04:05 -> "2 days 3 hr 4 min 5 sec"
+        ~400 days -> "1 yr 1 mon 5 days ..."  (approx, months=30 days, years=365 days)
     """
     # Convert string to timedelta
     if isinstance(value, str):
@@ -598,16 +602,26 @@ def human_readable_time(value):
         raise TypeError("Value must be timedelta or string H:MM:SS.micro")
 
     total_seconds = int(td.total_seconds())
-    hours = total_seconds // 3600
-    minutes = (total_seconds % 3600) // 60
-    seconds = total_seconds % 60
+
+    # Breakdown into units
+    years, rem = divmod(total_seconds, 365 * 24 * 3600)
+    months, rem = divmod(rem, 30 * 24 * 3600)   # approximate months = 30 days
+    days, rem = divmod(rem, 24 * 3600)
+    hours, rem = divmod(rem, 3600)
+    minutes, seconds = divmod(rem, 60)
 
     parts = []
-    if hours > 0:
+    if years:
+        parts.append(f"{years} yr")
+    if months:
+        parts.append(f"{months} mon")
+    if days:
+        parts.append(f"{days} day{'s' if days > 1 else ''}")
+    if hours:
         parts.append(f"{hours} hr")
-    if minutes > 0:
+    if minutes:
         parts.append(f"{minutes} min")
-    if seconds > 0 or (hours == 0 and minutes == 0):
+    if seconds or not parts:  # show 0 sec if nothing else
         parts.append(f"{seconds} sec")
 
     return " ".join(parts)

@@ -434,6 +434,8 @@ def machinetypeRestore(request, pk):
     return dynamic_restore_view(request, 'core', 'MachineType', pk)
 
 def machine(request):
+    machine = get_user_machines(request.user)
+    print(machine)
     list_display = ('sl', 'mc_no', 'brand', 'model', 'category', 'block', 'block__floor__building__company', 'created_by', 'created_at', 'updated_by', 'updated_at',)
     default_sort = ['mc_no']  
     list_filter = ('mc_no', 'brand', 'model', 'category', 'block',)  
@@ -443,6 +445,9 @@ def machine(request):
         'default_sort': default_sort,
         'list_filter': list_filter,
         'per_page': 15,
+        'pre_filter': {
+            'id__in': get_user_machines(request.user)
+        }
     }
     
     return dynamic_view(request, 'core', 'Machine', context)

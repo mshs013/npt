@@ -88,7 +88,7 @@ class DynamicPermissionMiddleware(MiddlewareMixin):
         public_paths = getattr(settings, 'PUBLIC_PATHS', ['/login/', '/logout/', '/static/', '/media/'])
 
         # Skip public paths or decorated views
-        if not url_name or getattr(view_func, "_skip_permission", False) or any(path.startswith(p) for p in public_paths):
+        if not url_name or getattr(view_func, "_skip_permission", False) or any(path.startswith(p) for p in public_paths) or "django_plotly_dash" in path:
             return None
 
         perm_name = self.get_permission_from_url(url_name)
