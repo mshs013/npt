@@ -18,6 +18,7 @@ dash_renderer==1.9.1
 diff-match-patch==20241021
 Django==5.2.4
 django-bootstrap4==25.2
+django-colorfield==0.14.0
 django-crispy-forms==2.4
 django-cron==0.6.0
 django-debug-toolbar==5.2.0
