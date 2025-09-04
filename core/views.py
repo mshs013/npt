@@ -175,7 +175,7 @@ def designationRestore(request, pk):
     return dynamic_restore_view(request, 'core', 'Designation', pk)
 
 def reason(request):
-    list_display = ('sl', 'name', 'min_time', 'remote_num', 'created_by', 'created_at', 'updated_by', 'updated_at',)
+    list_display = ('sl', 'name', 'min_time', 'remote_num', 'color', 'created_by', 'created_at', 'updated_by', 'updated_at',)
     default_sort = ['remote_num']  # Default sorting by name ascending and created_at descending
     list_filter = ('name', 'min_time', 'remote_num')  # Filters to include in the form
 
@@ -189,14 +189,14 @@ def reason(request):
     return dynamic_view(request, 'core', 'NptReason', context)
 
 def reasonForm(request, pk=None):
-    fields = ('name', 'min_time', 'remote_num',)  # Specify fields to include in the form
+    fields = ('name', 'min_time', 'remote_num', 'color',)  # Specify fields to include in the form
     return dynamic_form_view(request, 'core', 'NptReason', pk, fields)
 
 def reasonDelete(request, pk):
     return dynamic_delete_view(request, 'core', 'NptReason', pk)
 
 def reasonTrashed(request):
-    list_display = ('sl', 'name', 'min_time', 'remote_num', 'deleted_by', 'deleted_at',)
+    list_display = ('sl', 'name', 'min_time', 'remote_num', 'color', 'deleted_by', 'deleted_at',)
     default_sort = ['-deleted_at']  # Default sorting by name ascending and deleted_at descending
     list_filter = ('name', 'min_time', 'remote_num')  # Filters to include in the form
 

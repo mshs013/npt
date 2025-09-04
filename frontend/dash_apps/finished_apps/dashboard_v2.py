@@ -13,7 +13,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta, date, time
 
-from frontend.utitlity_functions.function_chart_helper import process_npt_to_hourly
+from frontend.utils.function_chart_helper import process_npt_to_hourly
 
 app = DjangoDash("MachineDashboard_v2", serve_locally=True)
 
@@ -827,82 +827,190 @@ def update_dashboard(n_intervals, callback_context=None, request=None, user=None
     rolls_produced_total = data["rolls_produced_total"]
 
     return dbc.Container([
-        # Cards
+        # Cards Row 1
         dbc.Row([
-            dbc.Col(info_box(f"{format_seconds(total_npt)}", "Total NPT", "bg-info", "fas fa-clock", ''), width=3),
-            dbc.Col(info_box(str(total_events), "Total Events", "bg-warning", "fas fa-list", ''), width=2),
-            dbc.Col(info_box(str(active_machines), "Active Machines", "bg-primary", "fas fa-cogs", ''), width=2),
-            dbc.Col(info_box(str(inactive_machines), "Inactive Machines", "bg-secondary", "fas fa-power-off", ''), width=2),
-            dbc.Col(info_box(str(total_avg_event_all_machine), "Avg Events for All Machines", "bg-danger", "fas fa-chart-bar", ''), width=3),
-            dbc.Col(info_box(f"{total_avg_npt_all_machine}", "Avg NPT for All Machines", "bg-danger", "fas fa-tachometer-alt", ''), width=3),
-            dbc.Col(info_box(f"{overall_npt_percent}%", "Overall NPT %", "bg-info", "fas fa-exclamation-triangle", ''), width=3),
-            dbc.Col(info_box(f"{overall_pt_percent}%", "Overall PT %", "bg-success", "fas fa-check-circle", ''), width=3),
-            dbc.Col(info_box(f"{rolls_produced_total}", "Rolls Produced ", "bg-secondary", "fas fa-industry", ''), width=3),
-        ], className="mb-4"),
+            dbc.Col([
+                info_box(f"{format_seconds(total_npt)}", "Total NPT", "bg-info", "fas fa-clock", '')
+            ], className="col-sm-6 col-md-3 mb-3", width=12),
+            
+            dbc.Col([
+                info_box(str(total_events), "Total Events", "bg-warning", "fas fa-list", '')
+            ], className="col-sm-6 col-md-3 mb-3", width=12),
+            
+            dbc.Col([
+                info_box(str(active_machines), "Active Machines", "bg-primary", "fas fa-cogs", '')
+            ], className="col-sm-6 col-md-3 mb-3", width=12),
+            
+            dbc.Col([
+                info_box(str(inactive_machines), "Inactive Machines", "bg-secondary", "fas fa-power-off", '')
+            ], className="col-sm-6 col-md-3 mb-3", width=12),
+        ], className="g-3 mb-4"),
+        
+        # Cards Row 2
+        dbc.Row([            
+            dbc.Col([
+                info_box(str(total_avg_event_all_machine), "Avg Events for All Machines", "bg-danger", "fas fa-chart-bar", '')
+            ], className="col-sm-6 col-md-3 mb-3", width=12),
+            dbc.Col([
+                info_box(f"{total_avg_npt_all_machine}", "Avg NPT for All Machines", "bg-danger", "fas fa-tachometer-alt", '')
+            ], className="col-sm-6 col-md-3 mb-3", width=12),
+            
+            dbc.Col([
+                info_box(f"{overall_npt_percent}%", "Overall NPT %", "bg-info", "fas fa-exclamation-triangle", '')
+            ], className="col-sm-6 col-md-3 mb-3", width=12),
+            
+            dbc.Col([
+                info_box(f"{rolls_produced_total}", "Rolls Produced", "bg-secondary", "fas fa-industry", '')
+            ], className="col-sm-6 col-md-3 mb-3", width=12),
+        ], className="g-3 mb-4"),
 
-        # Charts
+        # Charts Row 1 - Machine Charts
         dbc.Row([
-            # Machinewise charts
-            dbc.Col(dcc.Graph(figure=figs.get("fig_npt_by_machine", {}), style={"height":"400px"}), width=4),
-            dbc.Col(dcc.Graph(figure=figs.get("fig_machine_perf", {}), style={"height":"400px"}), width=4),
-            dbc.Col(dcc.Graph(figure=figs.get("fig_npt_by_machine_reason", {}), style={"height":"400px"}), width=4),
-        ], className="mb-4"),
-        dbc.Row([
-            # Hourly Npt Trend chart
-            dbc.Col(dcc.Graph(figure=figs.get("fig_hourly_trend", {}), style={"height":"400px"}), width=12)
-        ], className="mb-4"),
-        dbc.Row([
-            # Reasonwise charts
-            dbc.Col(dcc.Graph(figure=figs.get("fig_npt_by_reason_bar", {}), style={"height":"400px"}), width=6),
-            dbc.Col(dcc.Graph(figure=figs.get("fig_npt_by_reason_pie", {}), style={"height":"400px"}), width=6),
-        ], className="mb-4"),
-        dbc.Row([
-            # Rotation Counter charts
-            dbc.Col(dcc.Graph(figure=figs.get("fig_hourly_trend_rotation", {}), style={"height":"400px"}), width=12)
-        ], className="mb-4"),
-        dbc.Row([
-            # Shiftwise charts
-            dbc.Col(dcc.Graph(figure=figs.get("fig_shiftwise_trend", {}), style={"height":"400px"}), width=6),
-            dbc.Col(dcc.Graph(figure=figs.get("fig_npt_by_shift", {}), style={"height":"400px"}), width=3),
-            dbc.Col(dcc.Graph(figure=figs.get("fig_shiftwise_npt", {}), style={"height":"400px"}), width=3)
-
-        ], className="mb-4"),
-
-        # Tables
-        dbc.Row([
-            # Machine Summary table
             dbc.Col([
                 dbc.Card([
-                    dbc.CardHeader(html.H5("Machinewise Performance Summary", className="mb-0 text-black"),),
-                    dbc.CardBody([tables["machine_summary_table"]]) ], 
-                    style={"boxShadow": "none"})], width=8),
-            # Inactive Machines
+                    dbc.CardBody([
+                        dcc.Graph(figure=figs.get("fig_npt_by_machine", {}), style={"height":"400px"})
+                    ], className="p-0")
+                ], className="shadow-sm border-0 h-100")
+            ], width=12, className="col-sm-6 col-lg-4 col-md-6 mb-4"),
+            
             dbc.Col([
                 dbc.Card([
-                    dbc.CardHeader(
-                        html.H5("Inactive Machines List", className="mb-0 text-black"),
-                        
-                    ),
+                    dbc.CardBody([
+                        dcc.Graph(figure=figs.get("fig_machine_perf", {}), style={"height":"400px"})
+                    ], className="p-0")
+                ], className="shadow-sm border-0 h-100")
+            ], width=12, className="col-sm-6 col-lg-4 col-md-6 mb-4"),
+            
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardBody([
+                        dcc.Graph(figure=figs.get("fig_npt_by_machine_reason", {}), style={"height":"400px"})
+                    ], className="p-0")
+                ], className="shadow-sm border-0 h-100")
+            ], width=12, className="col-sm-6 col-lg-4 col-md-6 mb-4"),
+        ], className="g-3"),
+
+        # Hourly Trend Chart
+        dbc.Row([
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardBody([
+                        dcc.Graph(figure=figs.get("fig_hourly_trend", {}), style={"height":"400px"})
+                    ], className="p-0")
+                ], className="shadow-sm border-0")
+            ], width=12, className="mb-4")
+        ]),
+
+        # Reason Charts
+        dbc.Row([
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardBody([
+                        dcc.Graph(figure=figs.get("fig_npt_by_reason_bar", {}), style={"height":"400px"})
+                    ], className="p-0")
+                ], className="shadow-sm border-0 h-100")
+            ], width=12, className="col-sm-6 col-lg-6 col-md-6 mb-4"),
+            
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardBody([
+                        dcc.Graph(figure=figs.get("fig_npt_by_reason_pie", {}), style={"height":"400px"})
+                    ], className="p-0")
+                ], className="shadow-sm border-0 h-100")
+            ], width=12, className="col-sm-6 col-lg-6 col-md-6 mb-4"),
+        ], className="g-3"),
+
+        # Rotation Counter Chart
+        dbc.Row([
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardBody([
+                        dcc.Graph(figure=figs.get("fig_hourly_trend_rotation", {}), style={"height":"400px"})
+                    ], className="p-0")
+                ], className="shadow-sm border-0")
+            ], width=12, className="mb-4")
+        ]),
+
+        # Shift Charts
+        dbc.Row([
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardBody([
+                        dcc.Graph(figure=figs.get("fig_shiftwise_trend", {}), style={"height":"400px"})
+                    ], className="p-0")
+                ], className="shadow-sm border-0 h-100")
+            ], width=12, className="col-sm-6 col-lg-6 col-md-6 mb-4"),
+            
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardBody([
+                        dcc.Graph(figure=figs.get("fig_npt_by_shift", {}), style={"height":"400px"})
+                    ], className="p-0")
+                ], className="shadow-sm border-0 h-100")
+            ], width=12, className="col-sm-6 col-lg-3 col-md-6 mb-4"),
+            
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardBody([
+                        dcc.Graph(figure=figs.get("fig_shiftwise_npt", {}), style={"height":"400px"})
+                    ], className="p-0")
+                ], className="shadow-sm border-0 h-100")
+            ], width=12, className="col-sm-6 col-lg-3 col-md-6 mb-4"),
+        ], className="g-3"),
+
+        # Tables Section
+        dbc.Row([
+            # Machine Summary Table
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardHeader([
+                        html.H5("Machinewise Performance Summary", className="mb-0 text-dark fw-bold")
+                    ], className="bg-light border-bottom"),
+                    dbc.CardBody([
+                        tables["machine_summary_table"]
+                    ], className="p-3")
+                ], className="shadow-sm border-0 h-100")
+            ], width=12, className="col-sm-6 col-lg-8 col-md-6 mb-4"),
+            
+            # Inactive Machines Table
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardHeader([
+                        html.H5("Inactive Machines List", className="mb-0 text-dark fw-bold")
+                    ], className="bg-light border-bottom"),
                     dbc.CardBody([
                         tables["inactive_machines_table"]
-                    ])
-                ], style={"boxShadow": "none"})
-            ], width=4),
+                    ], className="p-3")
+                ], className="shadow-sm border-0 h-100")
+            ], width=12, className="col-sm-6 col-lg-4 col-md-6 mb-4"),
+        ], className="g-3"),
 
-             # shift Summary table
+        # Shift Summary Table
+        dbc.Row([
             dbc.Col([
                 dbc.Card([
-                    dbc.CardHeader(
-                        html.H5("Shiftwise Performance Summary", className="mb-0 text-black"),),
-                    dbc.CardBody([tables["shift_summary_table"]],)],
-                    style={"boxShadow": "none"})], width=12)
-            ], className="mb-4"),
-         #  Reason Summary table
-         dbc.Col([
+                    dbc.CardHeader([
+                        html.H5("Shiftwise Performance Summary", className="mb-0 text-dark fw-bold")
+                    ], className="bg-light border-bottom"),
+                    dbc.CardBody([
+                        tables["shift_summary_table"]
+                    ], className="p-3")
+                ], className="shadow-sm border-0")
+            ], width=12, className="mb-4")
+        ]),
+
+        # Reason Summary Table
+        dbc.Row([
+            dbc.Col([
                 dbc.Card([
-                    dbc.CardHeader(
-                        html.H5(" Reasonwise NPT Summary", className="mb-0 text-black"),),
-                    dbc.CardBody([tables["npt_summary_table"]])],
-                    style={"boxShadow": "none"})],
-                    width=12),
-    ], fluid=True)
+                    dbc.CardHeader([
+                        html.H5("Reasonwise NPT Summary", className="mb-0 text-dark fw-bold")
+                    ], className="bg-light border-bottom"),
+                    dbc.CardBody([
+                        tables["npt_summary_table"]
+                    ], className="p-3")
+                ], className="shadow-sm border-0")
+            ], width=12, className="mb-4")
+        ])
+    ], fluid=True, className="py-4")

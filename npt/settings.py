@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     "dpd_static_support",
     "channels",
     'bootstrap4',
+    'colorfield',
 
     'core',
     'library',

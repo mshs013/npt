@@ -10,6 +10,7 @@ from django.utils.html import mark_safe
 from django.urls import reverse
 from django.conf import settings
 from django.core.mail import send_mail
+from colorfield.fields import ColorField
 from core.mixins import CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel
 from datetime import datetime
 from core.fields import MACAddressField
@@ -176,6 +177,7 @@ class NptReason(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
     name = models.CharField(max_length=150)
     min_time = models.PositiveIntegerField(default=1)
     remote_num = models.PositiveIntegerField()
+    color = ColorField(default='#FF0000')
 
     class Meta: 
         verbose_name = "NPT Reason"
