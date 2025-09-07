@@ -323,7 +323,7 @@ def buildingRestore(request, pk):
     return dynamic_restore_view(request, 'core', 'Building', pk)
 
 def floor(request):
-    list_display = ('sl', 'name', 'building', 'created_by', 'created_at', 'updated_by', 'updated_at',)
+    list_display = ('sl', 'name', 'building', 'building__company', 'created_by', 'created_at', 'updated_by', 'updated_at',)
     default_sort = ['name', 'building']  # Default sorting by name ascending and created_at descending
     list_filter = ('name', 'building',)  # Filters to include in the form
 
@@ -360,7 +360,7 @@ def floorRestore(request, pk):
     return dynamic_restore_view(request, 'core', 'Floor', pk)
 
 def block(request):
-    list_display = ('sl', 'name', 'floor', 'created_by', 'created_at', 'updated_by', 'updated_at',)
+    list_display = ('sl', 'name', 'floor', 'floor__building', 'floor__building__company', 'created_by', 'created_at', 'updated_by', 'updated_at',)
     default_sort = ['name', 'floor']  # Default sorting by name ascending and created_at descending
     list_filter = ('name', 'floor',)  # Filters to include in the form
 

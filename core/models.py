@@ -226,7 +226,7 @@ class Company(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
         return f"{self.name}"
     
 class Building(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
-    name = models.CharField(max_length=150, unique=True)
+    name = models.CharField(max_length=150)
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="building_company")
 
     class Meta:
@@ -236,12 +236,15 @@ class Building(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
             ("trashed_building", "Can view trashed Building"),
             ("restore_building", "Can view restore Building"),
         ]
+        constraints = [
+            models.UniqueConstraint(fields=["company", "name"], name="unique_building_company")
+        ]
 
     def __str__(self):
         return f"{self.name}"
     
 class Floor(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
-    name = models.CharField(max_length=150, unique=True)
+    name = models.CharField(max_length=150)
     building = models.ForeignKey(Building, on_delete=models.CASCADE, related_name="floor_building")
 
     class Meta:
@@ -251,12 +254,15 @@ class Floor(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
             ("trashed_floor", "Can view trashed Floor"),
             ("restore_floor", "Can view restore Floor"),
         ]
+        constraints = [
+            models.UniqueConstraint(fields=["building", "name"], name="unique_floor_building")
+        ]
 
     def __str__(self):
         return f"{self.name}"
     
 class Block(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
-    name = models.CharField(max_length=150, unique=True)
+    name = models.CharField(max_length=150)
     floor = models.ForeignKey(Floor, on_delete=models.CASCADE, related_name="block_floor")
 
     class Meta:
@@ -265,6 +271,9 @@ class Block(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
         permissions = [
             ("trashed_block", "Can view trashed Block"),
             ("restore_block", "Can view restore Block"),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=["floor", "name"], name="unique_block_floor")
         ]
 
     def __str__(self):
