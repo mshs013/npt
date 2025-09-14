@@ -1,7 +1,9 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
 from django.forms.widgets import CheckboxSelectMultiple
-from core.models import User
+from django.http import JsonResponse
+from core.models import User, Company
+from core.middleware import skip_permission
 from core.forms import DynamicUserProfileForm
 from core.utils.views import dynamic_view, dynamic_form_view, dynamic_delete_view, dynamic_trashed_view, dynamic_restore_view, dynamic_detail_view, dynamic_multiform_view
 from core.utils.utils import get_user_machines
@@ -27,6 +29,19 @@ def server_error_view(request):
         'title' : "500 - Server Error"
     }
     return render(request, "core/500.html", context)
+
+@skip_permission
+def switch_company(request):
+    if request.method == 'POST':
+        company_id = request.POST.get('company_id')
+        try:
+            company = request.user.profile.company.get(pk=company_id)
+            request.session['active_company_id'] = company.id
+            request.session.modified = True
+            return JsonResponse({'status': 'ok', 'company': company.name})
+        except Company.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Company not found'})
+    return JsonResponse({'status': 'error', 'message': 'Invalid request'})
 
 def menu(request):
     list_display = ('name', 'parent', 'url', 'order', 'permission',)
@@ -249,7 +264,7 @@ def brandRestore(request, pk):
     return dynamic_restore_view(request, 'core', 'Brand', pk)
 
 def company(request):
-    list_display = ('sl', 'name', 'created_by', 'created_at', 'updated_by', 'updated_at',)
+    list_display = ('sl', 'name', 'abv', 'logo', 'website', 'email', 'phone', 'created_by', 'created_at', 'updated_by', 'updated_at',)
     default_sort = ['name']  # Default sorting by name ascending and created_at descending
     list_filter = ('name',)  # Filters to include in the form
 
@@ -263,14 +278,14 @@ def company(request):
     return dynamic_view(request, 'core', 'Company', context)
 
 def companyForm(request, pk=None):
-    fields = ('name',)  # Specify fields to include in the form
+    fields = ('name', 'abv', 'logo', 'website', 'email', 'phone', 'address',)  # Specify fields to include in the form
     return dynamic_form_view(request, 'core', 'Company', pk, fields)
 
 def companyDelete(request, pk):
     return dynamic_delete_view(request, 'core', 'Company', pk)
 
 def companyTrashed(request):
-    list_display = ('sl', 'name', 'deleted_by', 'deleted_at',)
+    list_display = ('sl', 'name', 'abv', 'logo', 'website', 'email', 'phone', 'deleted_by', 'deleted_at',)
     default_sort = ['-deleted_at']  # Default sorting by name ascending and deleted_at descending
     list_filter = ('name',)  # Filters to include in the form
 

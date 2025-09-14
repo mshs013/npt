@@ -18,6 +18,21 @@ QUOTE_MAP = {i: "_%02X" % i for i in b'":/_#?;@&=+$,"[]<>%\n\\'}
 def get_profile_model():
     return apps.get_model('core', 'Profile')
 
+def get_active_company(request):
+    """Return Company instance or None (fast path uses request.active_company)."""
+    active = getattr(request, "active_company", None)
+    if active is not None:
+        return active
+    # fallback to reading session (rare if middleware installed)
+    cid = request.session.get('active_company_id')
+    if cid:
+        from core.models import Company
+        try:
+            return Company.objects.get(pk=cid)
+        except Company.DoesNotExist:
+            return None
+    return None
+
 def paginate_queryset(request, queryset, per_page=10):
     """Paginate a queryset."""
     paginator = Paginator(queryset, per_page)

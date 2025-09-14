@@ -1,6 +1,7 @@
 # core/context_processors.py
 
 from django.conf import settings
+from core.utils.utils import get_active_company
 
 def adminlte_settings(request):
     """
@@ -9,3 +10,7 @@ def adminlte_settings(request):
     return {
         "ADMINLTE_SETTINGS": settings.ADMINLTE_SETTINGS
     }
+
+
+def active_company(request):
+    return {"active_company": get_active_company(request)}

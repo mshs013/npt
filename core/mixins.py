@@ -2,11 +2,12 @@
 from django.db import models
 from django.utils import timezone
 from django.conf import settings
+from django.apps import apps
 from django.dispatch import Signal, receiver
 from django.db.models.signals import post_save
-from core.managers import SoftDeleteManager, DeletedManager, GlobalManager
+from core.managers import SoftDeleteManager, DeletedManager, GlobalManager, CompanyScopedManager
 from core.signals import post_soft_delete, post_hard_delete, post_restore
-from core.middleware import get_current_user
+from core.middleware import get_current_user, get_current_request
 
 User = settings.AUTH_USER_MODEL
 
@@ -72,3 +73,27 @@ class SoftDeleteModel(models.Model):
         self.deleted_at = None
         self.save()
         post_restore.send(sender=self.__class__, instance=self)
+
+class CompanyScopedModel(models.Model):
+    """
+    Abstract base for models that belong to a company.
+    Uses the CompanyScopedManager for `objects` and provides all_objects for unscoped access.
+    """
+    company = models.ForeignKey('core.Company', on_delete=models.CASCADE)
+    objects = CompanyScopedManager()  # company-scoped manager
+    all_objects = models.Manager()    # unfiltered manager
+
+    class Meta:
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        # auto assign company if not set
+        if not self.company_id:
+            request = get_current_request()
+            if request and getattr(request, 'active_company', None):
+                self.company = request.active_company
+            else:
+                user = get_current_user()
+                if user and hasattr(user, 'profile'):
+                    self.company = user.profile.default_company or user.profile.company.first()
+        super().save(*args, **kwargs)

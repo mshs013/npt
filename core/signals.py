@@ -191,3 +191,28 @@ def connect_signals():
     post_save.connect(create_or_update_user_profile, sender=User)
     m2m_changed.connect(handle_user_permission_change, sender=User.user_permissions.through)
     post_save.connect(handle_menu_update, sender=Menu)
+
+@receiver(user_logged_in)
+def set_active_company_on_login(sender, user, request, **kwargs):
+    """
+    When the user logs in, set session['active_company_id'] to user's default_company
+    (or their first company) if not already set.
+    """
+    Profile = get_profile_model()
+    try:
+        profile = user.profile
+    except Profile.DoesNotExist:
+        return
+
+    if 'active_company_id' in request.session:
+        return  # keep previously selected company if already present
+
+    # Prefer default_company
+    if profile.default_company:
+        request.session['active_company_id'] = profile.default_company.id
+        return
+
+    # Otherwise pick the first company (if any)
+    first = profile.company.first()
+    if first:
+        request.session['active_company_id'] = first.id

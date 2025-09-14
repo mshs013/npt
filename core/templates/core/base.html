@@ -164,5 +164,33 @@
         <script src="{% static 'adminlte/dist/js/custom.js' %}"></script>
         <!-- Extra JS -->
         {% block extra_js %}{% endblock %}
+        <script>
+        $(document).ready(function(){
+            $('.company-item').click(function(e){
+                e.preventDefault();
+
+                var companyId = $(this).data('id');
+
+                $.ajax({
+                    url: "{% url 'switch_company' %}",
+                    type: "POST",
+                    data: {
+                        'company_id': companyId,
+                        'csrfmiddlewaretoken': '{{ csrf_token }}'
+                    },
+                    success: function(response){
+                        if(response.status === 'ok'){
+                            location.reload();
+                        } else {
+                            alert(response.message || 'Failed to switch company');
+                        }
+                    },
+                    error: function(){
+                        alert('AJAX error: could not switch company');
+                    }
+                });
+            });
+        });
+        </script>
     </body>
 </html>

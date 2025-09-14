@@ -110,6 +110,31 @@
             <i class="fas fa-th-large"></i>
         </a>
     </li>
+    <!-- Comapny Switcher -->
+    <li class="nav-item dropdown">
+        <a class="nav-link" data-toggle="dropdown" href="#">
+            <i class="fas fa-building"></i>
+        </a>
+        <div class="dropdown-menu dropdown-menu-lg dropdown-menu-right">
+            <span class="dropdown-header">{% trans 'Companies' %}</span>
+            <div class="dropdown-divider"></div>
+            {% for company in request.user.profile.company.all %}
+                <a href="#" class="dropdown-item company-item" data-id="{{ company.id }}">
+                    {% if request.active_company and company.id == request.active_company.id %}
+                        <i class="fas fa-check mr-2"></i>
+                    {% else %}
+                        <span style="width: 18px; display:inline-block;"></span>
+                    {% endif %}
+                    {{ company.name }}
+                </a>
+                <div class="dropdown-divider"></div>
+            {% empty %}
+                <span class="dropdown-item text-muted">{% trans 'No companies assigned' %}</span>
+            {% endfor %}
+            <a href="#" class="dropdown-item dropdown-footer">{% trans 'Switch Company' %}</a>
+        </div>
+    </li>
+    <!-- /.company switcher -->
     <li class="nav-item dropdown">
         <a class="nav-link btn" data-toggle="dropdown" href="#" title="{{ request.user }}">
             <i class="far fa-user" aria-hidden="true"></i>

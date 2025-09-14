@@ -16,9 +16,11 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 import math
 
-from frontend.utils.function_filter import get_current_shift_display, filter_by_shift, get_shift_for_time, get_shift_identifier, parse_filters_and_dates, apply_npt_filters
-from frontend.utils.function_time import calculate_minutes_between, get_date_range, format_duration_hms, calculate_seconds_between
-from frontend.utils.function_overall_performance_helper import generate_shift_table, generate_summary_table
+from core.utils.utils import paginate_queryset
+from frontend.utils.function_filter import get_current_shift_display, filter_by_shift,get_shift_for_time,get_shift_identifier,parse_filters_and_dates,apply_npt_filters,skip_null_on_time_except_last,get_shift_duration_seconds
+from frontend.utils.function_time import calculate_minutes_between,get_date_range,format_duration_hms,calculate_seconds_between,get_datetime_range
+from frontend.utils.function_overall_performance_helper import generate_shift_table,generate_summary_table
+
 
 
 # Create your views here.
@@ -36,10 +38,13 @@ def mclogs(request):
     View to display ProcessedNPT records with filtering capabilities
     """
     # Fetch machines user has access to
+    print(request.user.is_authenticated)
     if request.user is None or isinstance(request.user, AnonymousUser) or not request.user.is_authenticated:
         machines = Machine.objects.none()
+        print(machines)
     else:
         machines = get_user_machines(request.user)
+        print(machines)
 
     # Get filter parameters from request
     machine_filter = request.GET.get('machine', '')
@@ -47,13 +52,7 @@ def mclogs(request):
     shift_filter = request.GET.get('shift', '')
 
     # Set default date values
-    current_date = date.today()
-    current_datetime = datetime.now()
-    default_date_from = current_date.strftime('%Y-%m-%dT00:00')
-    default_date_to = current_datetime.strftime('%Y-%m-%dT%H:%M')  # Fixed format
-    
-    date_from = request.GET.get('date_from', default_date_from)
-    date_to = request.GET.get('date_to', default_date_to)
+    date_from, date_to, datetime_from_formatted, datetime_to_formatted = get_datetime_range(request)
     
     # Start with all records - use prefetch_related for better performance
     npt_records = ProcessedNPT.objects.select_related('machine', 'reason').filter(machine__in=machines)
@@ -75,15 +74,15 @@ def mclogs(request):
     # Date filtering with better error handling
     if date_from:
         try:
-            from_datetime = datetime.fromisoformat(date_from.replace('T', ' '))
-            npt_records = npt_records.filter(off_time__gte=from_datetime)
+            # from_datetime = datetime.fromisoformat(date_from.replace('T', ' '))
+            npt_records = npt_records.filter(off_time__gte=date_from)
         except ValueError:
             pass
     
     if date_to:
         try:
-            to_datetime = datetime.fromisoformat(date_to.replace('T', ' '))
-            npt_records = npt_records.filter(off_time__lte=to_datetime)
+            # to_datetime = datetime.fromisoformat(date_to.replace('T', ' '))
+            npt_records = npt_records.filter(off_time__lte=date_to)
         except ValueError:
             pass
     
@@ -97,7 +96,7 @@ def mclogs(request):
     
     # Order by most recent first
     npt_records = npt_records.order_by('-off_time')
-    
+    npt_records = skip_null_on_time_except_last(npt_records)
     # Calculate time range in seconds
     time_range_seconds = calculate_seconds_between(date_from, date_to)
     
@@ -128,6 +127,9 @@ def mclogs(request):
             "duration": duration
         })
     
+    # sorting npt data by off time
+    npt_data.sort(key=lambda x: x["offTime"], reverse=True)
+
     # Format reasons data
     reasons = [
         {"name": reason_name, "count": count}
@@ -162,8 +164,8 @@ def mclogs(request):
             "total_npt": format_duration_hms(round(total_machine_npt, 2)),
             "npt_percentage": npt_percentage,
         })
-        
-    # Get dropdown options for filters - Fixed: use correct filter
+    print(machines_list)
+
     machine_choices = machines.filter(is_deleted=False)  # Assuming SoftDeleteModel has is_deleted
     all_reasons = NptReason.objects.filter(is_deleted=False).order_by('name')
     
@@ -182,6 +184,8 @@ def mclogs(request):
         'filter_machines': machine_choices,
         'filter_reasons': all_reasons,
         'filter_shifts': all_shifts,
+        'datetime_from': datetime_from_formatted,
+        'datetime_to': datetime_to_formatted,
         'current_shift': get_current_shift_display(shift_filter),
         'footer_colspan': 2 + len(reasons),
         'title':'Machine Logs',
@@ -189,10 +193,13 @@ def mclogs(request):
     
     return render(request, 'frontend/mclogs.html', context)
 
+
+
 @skip_permission
 def mcgraph(request):
     """Render the NPT chart page"""
-    return render(request, 'frontend/mcgraph.html')
+    context = { 'title' : 'Machine Graph' }
+    return render(request, 'frontend/mcgraph.html', context)
 
 
 def mcgraph_api(request):
@@ -208,6 +215,9 @@ def mcgraph_api(request):
               .select_related('reason')
               .order_by('mc_no', 'off_time')
               .values('mc_no', 'reason__name', 'off_time', 'on_time'))
+
+        # removing null values
+        rows = skip_null_on_time_except_last(rows)
 
         npt = [{
             'machine_name': row['mc_no'],  # Just using mc_no since we don't have machine relationship
@@ -232,10 +242,8 @@ def mcgraph_api(request):
     
 
 ### Rotation Counter
+@skip_permission
 def rotaionCounter(request):
-    """
-    View to display rotation counter data, correctly identifying rolls and calculating per-roll RPM.
-    """
     # Fetch machines user has access to
     if request.user is None or isinstance(request.user, AnonymousUser) or not request.user.is_authenticated:
         machines = Machine.objects.none()
@@ -243,29 +251,23 @@ def rotaionCounter(request):
         machines = get_user_machines(request.user)
 
     print(machines)
+    
     # Get filter parameters from request
     machine_filter = request.GET.get('machine', '')
+    shift_filter = request.GET.get('shift', '')
     
-    # Set default date values to today
-    current_date = date.today()
-    default_date_from = current_date.strftime('%Y-%m-%d')
-    default_date_to = current_date.strftime('%Y-%m-%d')
+    from_datetime, to_datetime, datetime_from_formatted, datetime_to_formatted = get_datetime_range(request)
     
-    date_from_str = request.GET.get('date_from', default_date_from)
-    date_to_str = request.GET.get('date_to', default_date_to)
-    
-    # Parse dates for filtering, with a fallback to today if parsing fails
-    try:
-        from_date = datetime.strptime(date_from_str, '%Y-%m-%d').date()
-        to_date = datetime.strptime(date_to_str, '%Y-%m-%d').date()
-        from_datetime = datetime.combine(from_date, time.min)
-        to_datetime = datetime.combine(to_date, time.max)
-    except (ValueError, TypeError):
-        from_datetime = datetime.combine(current_date, time.min)
-        to_datetime = datetime.combine(current_date, time.max)
-        date_from_str = default_date_from
-        date_to_str = default_date_to
-    
+    pprint(datetime_from_formatted)
+    pprint(datetime_to_formatted)
+
+    print(from_datetime)
+    print(to_datetime)
+
+
+    duration = to_datetime - from_datetime
+    total_duration_minutes = duration.total_seconds() / 60
+
     # Base queryset for rotation records - filter by user machines
     rotation_qs = RotationStatus.objects.select_related('machine').filter(
         machine__in=machines,
@@ -283,19 +285,46 @@ def rotaionCounter(request):
     # Apply machine filter
     if machine_filter:
         try:
-            rotation_qs = rotation_qs.filter(machine__id=int(machine_filter))
-            npt_qs = npt_qs.filter(machine__id=int(machine_filter))
+            rotation_qs = rotation_qs.filter(machine__mc_no=machine_filter)
+            npt_qs = npt_qs.filter(machine__mc_no=machine_filter)
         except (ValueError, TypeError):
             pass
 
-    # Fetch records ordered for processing rolls (chronologically per machine)
-    rotation_records = rotation_qs.order_by('machine__mc_no', 'count_time')
-
-    # --- New Roll Processing Logic ---
-    all_rolls = []
+    # Apply shift filter
+    shifts = Shift.objects.all().order_by('start_time')
+    current_shift_display = ''
     
+    if shift_filter:
+        try:
+            selected_shift = Shift.objects.get(id=int(shift_filter))
+            current_shift_display = str(selected_shift)
+            print("Shift Selected: ", selected_shift)
+            total_duration_minutes = get_shift_duration_seconds(selected_shift)/60
+            # Filter by shift time using the utility function
+            rotation_qs = filter_by_shift(rotation_qs, selected_shift, "count_time")
+            npt_qs = filter_by_shift(npt_qs, selected_shift)
+            
+        except (Shift.DoesNotExist, ValueError, TypeError):
+            pass
+
+    # Fetch records ordered for processing rolls (chronologically per machine)
+    page_obj = rotation_qs.order_by('machine__mc_no', '-count_time')
+
+    rotation_records, paginator = paginate_queryset(request, page_obj, 50)
+
+    print(len(rotation_records))
+    # Skipping Null on_Times from npt_qs
+    npt_qs = skip_null_on_time_except_last(npt_qs)
+
+    # Calculate total duration of the selected window
+    # duration = to_datetime - from_datetime
+    # total_duration_minutes = duration.total_seconds() / 60
+    
+    
+   # --- Roll Processing Logic (Improved) ---
+    all_rolls = []
     # Group records by machine object to process each machine's rolls separately
-    for machine, machine_records_iter in groupby(rotation_records, key=lambda r: r.machine):
+    for machine, machine_records_iter in groupby(rotation_qs, key=lambda r: r.machine):
         if not machine:  # Skip records with no machine
             continue
             
@@ -304,18 +333,22 @@ def rotaionCounter(request):
         
         current_roll_records = []
         roll_no_counter = 1
-
+        previous_count = None
+        
         for record in machine_records:
-            # A new roll starts when count is 1.
-            if record.count == 1 and current_roll_records:
-                # Process the completed roll before starting the new one.
+            # A new roll starts when count decreases from the previous count
+            # or when we have no previous count (first record)
+            
+            if previous_count is not None and record.count < previous_count and current_roll_records:
+                # Process the completed roll before starting the new one
                 start_record = current_roll_records[0]
                 end_record = current_roll_records[-1]
                 
                 start_time = start_record.count_time
                 end_time = end_record.count_time
-                total_count = end_record.count
-
+                # Calculate actual rotations during this roll period
+                
+                total_count = end_record.count - start_record.count + 1
                 duration = end_time - start_time
                 duration_minutes = duration.total_seconds() / 60 if duration.total_seconds() > 0 else 0
                 
@@ -326,15 +359,16 @@ def rotaionCounter(request):
                     off_time__lt=end_time
                 )
                 npt_minutes = sum(npt.get_duration().total_seconds() / 60 for npt in roll_npt)
-
+                # print("npt Min: ", npt_minutes)
                 # Productive duration
                 productive_minutes = duration_minutes - npt_minutes
+                # print(productive_minutes)
                 if productive_minutes < 0:
                     productive_minutes = 0  # avoid negative time
 
                 # Calculate avg_rpm using productive time
                 avg_rpm = 0
-                if productive_minutes > 0 and total_count > 1:
+                if productive_minutes > 0 and total_count > 0:
                     revolutions = total_count 
                     avg_rpm = revolutions / productive_minutes
 
@@ -345,14 +379,21 @@ def rotaionCounter(request):
                     'end_time': end_time,
                     'total_count': total_count,
                     'duration_minutes': duration_minutes,
+                    'productive_minutes': productive_minutes,
                     'npt_minutes': round(npt_minutes, 2),
                     'avg_rpm': round(avg_rpm, 2)
                 })
                 roll_no_counter += 1
-                
+
+                # Start new roll with the current record
                 current_roll_records = [record]
             else:
+                # Continue adding to current roll
                 current_roll_records.append(record)
+            
+            # Update previous count for next iteration
+            previous_count = record.count
+        
         
         # After the loop, process the last remaining roll for the machine
         if current_roll_records:
@@ -361,7 +402,7 @@ def rotaionCounter(request):
             
             start_time = start_record.count_time
             end_time = end_record.count_time
-            total_count = end_record.count
+            total_count = end_record.count - start_record.count + 1
 
             duration = end_time - start_time
             duration_minutes = duration.total_seconds() / 60 if duration.total_seconds() > 0 else 0
@@ -372,7 +413,20 @@ def rotaionCounter(request):
                 off_time__gte=start_time,
                 off_time__lt=end_time
             )
-            npt_minutes = sum(npt.get_duration().total_seconds() / 60 for npt in roll_npt)
+            npt_minutes = 0
+            for npt in roll_npt:
+                if hasattr(npt, 'get_duration') and callable(npt.get_duration):
+                    # Use the model's get_duration method if available
+                    npt_minutes += npt.get_duration().total_seconds() / 60
+                else:
+                    # Manual calculation: handle null on_time
+                    if npt.on_time:
+                        duration = npt.on_time - npt.off_time
+                        npt_minutes += duration.total_seconds() / 60
+                    else:
+                        # For ongoing NPT (null on_time), calculate till roll end
+                        duration = end_time - npt.off_time
+                        npt_minutes += duration.total_seconds() / 60
 
             # Productive duration
             productive_minutes = duration_minutes - npt_minutes
@@ -392,17 +446,19 @@ def rotaionCounter(request):
                 'end_time': end_time,
                 'total_count': total_count,
                 'duration_minutes': duration_minutes,
+                'productive_minutes': productive_minutes,
                 'npt_minutes': round(npt_minutes, 2),
                 'avg_rpm': round(avg_rpm, 2)
             })
 
-    # --- Prepare data for the template ---
 
+    print(all_rolls)
     # 1. Intermediary Roll Data (sorted by start time, descending)
     intermediary_data = sorted(all_rolls, key=itemgetter('start_time'), reverse=True)
     for i, roll in enumerate(intermediary_data, 1):
         roll['serial_no'] = i
 
+    # 2. Machine Wise Summary with Total Counts
     machine_wise_summary = []
     machine_data = defaultdict(list)
     for roll in all_rolls:
@@ -410,13 +466,23 @@ def rotaionCounter(request):
 
     for mc_no, rolls in machine_data.items():
         total_rolls = len(rolls)
-        total_npt = sum(r['npt_minutes'] for r in rolls)
-        overall_avg_rpm = sum(r['avg_rpm'] for r in rolls) / total_rolls if total_rolls else 0
+        total_counts = sum(r['total_count'] for r in rolls)
+        total_duration = sum(r['duration_minutes'] for r in rolls)
+        total_productive = sum(r['productive_minutes'] for r in rolls)
+        total_npt = sum(r['npt_minutes'] for r in rolls) + (total_duration_minutes-total_duration)
+        
+        # Calculate overall average RPM based on total counts and total productive time
+        overall_avg_rpm = 0
+        if total_productive > 0 and total_counts > 0:
+            overall_avg_rpm = total_counts / total_productive
         
         machine_wise_summary.append({
             'mc_no': mc_no,
+            'total_counts': total_counts,
             'avg_rpm': round(overall_avg_rpm, 2),
+            'total_productive': total_productive,
             'npt_minutes': round(total_npt, 2),
+            'total_duration':round(total_duration_minutes,2),
             'total_rolls': total_rolls
         })
 
@@ -432,6 +498,8 @@ def rotaionCounter(request):
             'count_time': record.count_time,
             'count_no': record.count
         })
+    # sorting raw rotation data by count time in decending order
+    rotation_log.sort(key=lambda x: x["count_time"], reverse=True)
 
     # Get filter options for the dropdown - only machines user has access to
     if hasattr(machines, 'filter'):
@@ -441,25 +509,46 @@ def rotaionCounter(request):
         # machines is a list/other iterable
         machine_choices = Machine.objects.filter(id__in=machines, is_deleted=False).values_list('mc_no', flat=True).distinct().order_by('mc_no')
     
+    # Calculate totals for footer
     total_rolls_summary = sum(data['total_rolls'] for data in machine_wise_summary)
-    
+    total_counts_summary = sum(data['total_counts'] for data in machine_wise_summary)
+    total_npt_summary = sum(data['npt_minutes'] for data in machine_wise_summary)
+    overall_avg_rpm = 0
+    total_productive_all = 0
+
+    if machine_wise_summary:
+        total_productive_all = sum(roll['productive_minutes'] for roll in all_rolls)
+        if total_productive_all > 0 and total_counts_summary > 0:
+            overall_avg_rpm = total_counts_summary / total_productive_all
+
+    print("Total Duration: ", total_duration_minutes)
+    print("Machine Running Time: ", round(total_productive_all+total_npt_summary,2))
+    print("NPT: ", total_npt_summary)
     context = {
         'machine_wise_summary': machine_wise_summary,
         'intermediary_data': intermediary_data,
-        'rotation_log': rotation_log,
+        'page_obj': rotation_records,
         'filter_machines': machine_choices,
+        'filter_shifts': shifts,
         'selected_machine': machine_filter,
-        'date_from': date_from_str,
-        'date_to': date_to_str,
+        'selected_shift': shift_filter,
+        'current_shift_display': current_shift_display,
+        'datetime_from': datetime_from_formatted,
+        'datetime_to': datetime_to_formatted,
         'total_rolls': total_rolls_summary,
+        'total_counts': total_counts_summary,
+        'total_npt': total_npt_summary,
+        'total_productive_all':round(total_productive_all+total_npt_summary,2),
+        'overall_avg_rpm': round(overall_avg_rpm, 2),
         'current_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'title':'Rotation Counter',
+        'title': 'Rotation Counter',
     }
     
     return render(request, 'frontend/rotation_counter.html', context)
 
-### Report - daily performance
 
+### Report - daily performance
+@skip_permission
 def daily_performance(request, user=None):
     """
     View to display ProcessedNPT records with filtering capabilities
@@ -475,13 +564,7 @@ def daily_performance(request, user=None):
     reason_filter = request.GET.get('reason', '')
     shift_filter = request.GET.get('shift', '')
 
-    # Set default date values
-    current_date = date.today()
-    default_date_from = current_date  # Start of today
-    default_date_to = current_date  # Current time
-    
-    date_from = request.GET.get('date_from', default_date_from)
-    date_to = request.GET.get('date_to', default_date_to)
+    date_from, date_to, datetime_from_formatted, datetime_to_formatted = get_datetime_range(request, show_current_time=False)
     
     # Start with all records - filter by user machines
     npt_records = ProcessedNPT.objects.select_related('machine', 'reason').filter(machine__in=machines)
@@ -500,24 +583,17 @@ def daily_performance(request, user=None):
         except (ValueError, TypeError):
             pass
     
-    # Date filtering
     if date_from:
         try:
-            if type(date_from) == str:
-                date_from = datetime.strptime(date_from, "%Y-%m-%d").date()
-            npt_records = npt_records.filter(off_time__date__gte=date_from)
+            # from_datetime = datetime.fromisoformat(date_from.replace('T', ' '))
+            npt_records = npt_records.filter(off_time__gte=date_from)
         except ValueError:
             pass
     
     if date_to:
         try:
-            if type(date_to) == str:
-                date_to = datetime.strptime(date_to, "%Y-%m-%d").date()
-            # If same date, include the whole day
-            if date_to == date_from:
-                npt_records = npt_records.filter(off_time__date=date_to)
-            else:
-                npt_records = npt_records.filter(off_time__date__lte=date_to)
+            # to_datetime = datetime.fromisoformat(date_to.replace('T', ' '))
+            npt_records = npt_records.filter(off_time__lte=date_to)
         except ValueError:
             pass
     
@@ -531,10 +607,10 @@ def daily_performance(request, user=None):
     
     # Order by most recent first
     npt_records = npt_records.order_by('-off_time')
-
+    npt_records = skip_null_on_time_except_last(npt_records)
     # Calculate time range in minutes
     time_range_minutes = calculate_seconds_between(date_from, date_to)
-
+    print(len(npt_records))
     # Process data in single loop for efficiency
     reason_counts = {}
     reason_durations = {}  # For total NPT time per reason
@@ -839,17 +915,20 @@ def daily_performance(request, user=None):
         'filter_machines': machine_choices,
         'filter_reasons': all_reasons,
         'filter_shifts': all_shifts,
+        'datetime_from': datetime_from_formatted,
+        'datetime_to': datetime_to_formatted,
         'current_shift': get_current_shift_display(shift_filter),
         'footer_colspan': 2,
         # Plotly charts as HTML
         'bar_chart_html': bar_chart_html,
         'pie_chart_html': pie_chart_html,
         'donut_charts_html': donut_charts_html,
-        'title':'Daily Performance',
+        'title' : 'Daily Performance',
     }
     
     return render(request, 'frontend/daily_performance.html', context)### Overall Performance
 
+@skip_permission
 def overall_performance(request, user=None):
     """
     View to display ProcessedNPT records with filtering capabilities
@@ -899,6 +978,8 @@ def overall_performance(request, user=None):
     }))
 
     chart_data = [] # For Plotly charts
+    # removing null values
+    npt_records = skip_null_on_time_except_last(npt_records)
 
     for record in npt_records:
         machine = record.machine.mc_no
@@ -1043,6 +1124,6 @@ def overall_performance(request, user=None):
         'current_shift_id': int(filters['shift']) if filters['shift'] else None,
         'bar_chart_html': bar_chart_html,
         'line_chart_html': line_chart_html,
-        'title':'Overall Performance',
+        'title' : 'Overall Performance',
     }
     return render(request, 'frontend/overall_performance.html', context)

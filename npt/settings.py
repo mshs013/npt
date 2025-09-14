@@ -82,6 +82,7 @@ MIDDLEWARE = [
     'core.middleware.CurrentUserAndIdleTimeoutMiddleware',
     'core.middleware.LoginRequiredMiddleware',
     'core.middleware.DynamicPermissionMiddleware',
+    'core.middleware.ActiveCompanyMiddleware',
     "django_plotly_dash.middleware.BaseMiddleware",
     "django_plotly_dash.middleware.ExternalRedirectionMiddleware",
 ]
@@ -100,6 +101,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'core.context_processors.adminlte_settings',
+                'core.context_processors.active_company',
             ],
         },
     },

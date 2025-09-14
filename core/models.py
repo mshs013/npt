@@ -11,7 +11,7 @@ from django.urls import reverse
 from django.conf import settings
 from django.core.mail import send_mail
 from colorfield.fields import ColorField
-from core.mixins import CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel
+from core.mixins import CompanyScopedModel, CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel
 from datetime import datetime
 from core.fields import MACAddressField
 
@@ -154,6 +154,8 @@ class Profile(models.Model):
     designation = models.ForeignKey(Designation, on_delete=models.SET_NULL, null=True, blank=True, related_name='profiles')
     user_img = models.ImageField(upload_to='user/img/', null=True, blank=True)
     user_sign = models.ImageField(upload_to='user/sign/', null=True, blank=True)
+    company = models.ManyToManyField('Company', related_name="profiles", blank=True)
+    default_company = models.ForeignKey('Company', on_delete=models.SET_NULL, null=True, blank=True, related_name='default_for')
 
     class Meta: 
         verbose_name = "Profile"
@@ -173,7 +175,7 @@ class Profile(models.Model):
         else:
             return self.official_id
 
-class NptReason(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
+class NptReason(CompanyScopedModel, CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
     name = models.CharField(max_length=150)
     min_time = models.PositiveIntegerField(default=1)
     remote_num = models.PositiveIntegerField()
@@ -213,6 +215,12 @@ class Brand(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
     
 class Company(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
     name = models.CharField(max_length=150, unique=True)
+    abv = models.CharField(max_length=10, unique=True, null=True, help_text="Short name or code for the company (e.g. ABC, MSFT)")
+    logo = models.ImageField(upload_to='logo/', null=True, blank=True)
+    website = models.URLField(blank=True)
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=50, blank=True)
+    address = models.TextField(blank=True)
 
     class Meta:
         verbose_name = "Company"

@@ -15,9 +15,16 @@
 {% endblock %}
 
 {% block content %}
-<div class="card"      style="background-color: #f4f6f9; border: none; 
-            box-shadow: none; 
-            ">
+<style>
+    .table thead {
+    background-color: #3c8dbc!important; /* Bootstrap light blue shade */
+}
+
+    #inactive-machines-table thead{
+        background-color: #dc3545!important;
+    }
+</style>
+<div class="card bg-light border-0 shadow-none">
     <!-- <div class="card-header"> -->
         <!-- <h3 class="card-title">My Django + Plotly Dash Dashboard</h3> -->
         <!-- /.card-tools -->

@@ -31,23 +31,29 @@ def is_time_in_shift(time_obj, shift):
         return check_time >= start_time or check_time < end_time
 
 
-def filter_by_shift(queryset, shift):
+def filter_by_shift(queryset, shift, datetime_field='off_time'):
     """
-    Filter queryset by shift times, handling overnight shifts
+    Filter queryset by shift times.
+    Handles overnight shifts.
+    
+    `datetime_field` should be the name of the datetime field on the model
+    (e.g., 'count_time' for RotationStatus, 'off_time' for ProcessedNPT).
     """
     start_time = shift.start_time
     end_time = shift.end_time
-    
+
     if start_time < end_time:
         # Normal shift (e.g., 08:00 - 16:00)
-        return queryset.filter(
-            off_time__time__gte=start_time,
-            off_time__time__lt=end_time
-        )
+        filter_kwargs = {
+            f"{datetime_field}__time__gte": start_time,
+            f"{datetime_field}__time__lt": end_time
+        }
+        return queryset.filter(**filter_kwargs)
     else:
         # Overnight shift (e.g., 22:00 - 06:00)
         return queryset.filter(
-            Q(off_time__time__gte=start_time) | Q(off_time__time__lt=end_time)
+            Q(**{f"{datetime_field}__time__gte": start_time}) |
+            Q(**{f"{datetime_field}__time__lt": end_time})
         )
 
 
@@ -91,6 +97,51 @@ def get_shift_identifier(shift, all_shifts):
     else:
         return chr(ord('a') + list(all_shifts).index(shift))
     
+def get_shift_duration_seconds(shift):
+    """
+    Calculate shift duration in seconds, handling overnight shifts
+    """
+    from datetime import datetime, timedelta
+    
+    # Create datetime objects for calculation
+    start_dt = datetime.combine(datetime.today(), shift.start_time)
+    end_dt = datetime.combine(datetime.today(), shift.end_time)
+    
+    # Handle overnight shifts (end_time < start_time)
+    if shift.end_time < shift.start_time:
+        end_dt += timedelta(days=1)
+    
+    duration = end_dt - start_dt
+    return duration.total_seconds()
+
+
+
+
+
+def skip_null_on_time_except_last(npt_qs):
+    """
+    Skip NPT records with null on_time except for the latest record of each machine.
+    """
+    # Group by machine
+    machines = npt_qs.values_list('machine', flat=True).distinct()
+    filtered_qs = ProcessedNPT.objects.none()  # start empty queryset
+
+    for machine_id in machines:
+        machine_records = npt_qs.filter(machine_id=machine_id).order_by('off_time')
+        if not machine_records.exists():
+            continue
+        last_record = machine_records.last()  # keep last record even if on_time is null
+        # Filter records: exclude null on_time except last
+        non_null_records = machine_records.exclude(on_time__isnull=True)
+        # Combine with last record (avoid duplication if last_record already non-null)
+        if last_record.on_time is None:
+            non_null_records = non_null_records | ProcessedNPT.objects.filter(pk=last_record.pk)
+        filtered_qs = filtered_qs | non_null_records
+
+    return filtered_qs.distinct()
+
+
+
 
 def parse_filters_and_dates(request=None, **kwargs):
     """

@@ -80,3 +80,107 @@ class GlobalManager(models.Manager):
     """
     def get_queryset(self):
         return super().get_queryset()
+    
+
+class CompanyScopedQuerySet(models.QuerySet):
+    def for_companies(self, companies):
+        """
+        Accepts:
+          - single Company instance or id,
+          - iterable of instances/ids,
+          - QuerySet/Manager of companies.
+        Returns queryset filtered by company pk(s).
+        """
+        if companies is None:
+            return self.none()
+
+        # Normalize manager/queryset -> iterable
+        if hasattr(companies, "all") and not isinstance(companies, (list, tuple, set)):
+            companies_iter = companies.all()
+        else:
+            companies_iter = companies
+
+        if not hasattr(companies_iter, "__iter__") or isinstance(companies_iter, (str, bytes)):
+            companies_iter = [companies_iter]
+
+        pks = []
+        for c in companies_iter:
+            if c is None:
+                continue
+            if hasattr(c, "pk"):
+                pks.append(c.pk)
+            else:
+                try:
+                    pks.append(int(c))
+                except Exception:
+                    continue
+
+        if not pks:
+            return self.none()
+
+        return self.filter(company__pk__in=pks)
+
+    def for_company(self, company):
+        return self.for_companies(company)
+
+    def for_user(self, user, allow_superuser=True):
+        if user is None or not getattr(user, "is_authenticated", False):
+            return self.none()
+
+        if allow_superuser and getattr(user, "is_superuser", False):
+            return self
+
+        companies = None
+        profile = getattr(user, "profile", None)
+        if profile is not None and hasattr(profile, "company"):
+            companies = profile.company.all()  # <--- use `company` not `companies`
+        elif hasattr(user, "companies"):
+            try:
+                companies = user.companies.all()
+            except Exception:
+                companies = None
+
+        if companies is None:
+            from .models import Company
+            companies = Company.objects.filter(members=user)
+
+        if not companies:
+            return self.none()
+
+        return self.for_companies(companies)
+
+class CompanyScopedManager(models.Manager):
+    def get_queryset(self):
+        return CompanyScopedQuerySet(self.model, using=self._db)
+
+    def for_companies(self, companies):
+        return self.get_queryset().for_companies(companies)
+
+    def for_company(self, company):
+        return self.get_queryset().for_company(company)
+
+    def for_user(self, user, allow_superuser=True):
+        return self.get_queryset().for_user(user, allow_superuser=allow_superuser)
+
+    def for_request(self, request, allow_superuser=True):
+        """
+        Preference order:
+        1) request.active_company if middleware set it
+        2) request.session['active_company_id']
+        3) fallback to user's memberships (for_user)
+        """
+        # 1) middleware-provided attribute (fast, avoids extra DB hit)
+        active = getattr(request, "active_company", None)
+        if active is not None:
+            return self.for_company(active)
+
+        # 2) session
+        session = getattr(request, "session", None)
+        if session is not None:
+            cid = session.get("active_company_id")
+            if cid:
+                return self.for_companies(cid)
+
+        # 3) fallback to user membership
+        user = getattr(request, "user", None)
+        return self.for_user(user, allow_superuser=allow_superuser)

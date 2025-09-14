@@ -11,7 +11,7 @@ import pandas as pd
 import plotly.express as px
 
 
-app = DjangoDash("MachineDashboard", serve_locally=False)
+app = DjangoDash("MachineDashboard", serve_locally=True)
 
 # ---------------------
 # AdminLTE Info Box

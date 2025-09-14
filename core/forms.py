@@ -4,7 +4,7 @@ from django import forms
 from django.forms import modelform_factory, inlineformset_factory
 from django.contrib.auth.models import Group, Permission
 from crispy_forms.helper import FormHelper
-from core.models import User, Profile, UserBlockPermission, UserMachinePermission, Block, Machine, Department, Designation
+from core.models import User, Profile, UserBlockPermission, UserMachinePermission, Block, Machine, Department, Designation, Company
 from core.middleware import get_current_user
 
 
@@ -237,6 +237,16 @@ class DynamicUserProfileForm(forms.ModelForm):
     )
     user_img = forms.ImageField(required=False)
     user_sign = forms.ImageField(required=False)
+    companies = forms.ModelMultipleChoiceField(
+        queryset=Company.objects.all(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple
+    )
+    default_company = forms.ModelChoiceField(
+        queryset=Company.objects.all(),
+        required=False,
+        empty_label="Select Default Company"
+    )
 
     # Group and permissions
     groups = forms.ModelMultipleChoiceField(
@@ -275,6 +285,8 @@ class DynamicUserProfileForm(forms.ModelForm):
                 self.fields['designation'].initial = profile.designation
                 self.fields['user_img'].initial = profile.user_img
                 self.fields['user_sign'].initial = profile.user_sign
+                self.fields['companies'].initial = profile.company.all()  # updated
+                self.fields['default_company'].initial = profile.default_company
             except Profile.DoesNotExist:
                 pass
 
@@ -321,6 +333,8 @@ class DynamicUserProfileForm(forms.ModelForm):
             profile.user_img = self.cleaned_data.get('user_img')
         if self.cleaned_data.get('user_sign'):
             profile.user_sign = self.cleaned_data.get('user_sign')
+        profile.company.set(self.cleaned_data.get('companies'))  # updated
+        profile.default_company = self.cleaned_data.get('default_company')
         profile.save()
 
          # Save permissions (blocks/machines)

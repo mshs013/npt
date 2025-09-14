@@ -3,9 +3,17 @@ import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime, time
 
-# ==============================================================================
+
+# Getting Reason colors 
+
+def get_reason_color_map(NptReason):
+    reasons = NptReason.objects.all()
+    color_map = {reason.name: reason.color for reason in reasons}
+    return color_map
+
+
+
 # Helper Function to Process NPT into Hourly Buckets
-# ==============================================================================
 def process_npt_to_hourly(npt_df: pd.DataFrame) -> pd.DataFrame:
     """
     Processes raw NPT data to calculate total NPT for each hour of the day.

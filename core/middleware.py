@@ -15,6 +15,9 @@ def get_current_user():
     user = getattr(_thread_locals, 'user', None)
     return user if user and user.is_authenticated else None
 
+def get_current_request():
+    """Return the current request stored in thread-local storage."""
+    return getattr(_thread_locals, 'request', None)
 
 # ---------------------------
 # 1️⃣ Current user & idle timeout
@@ -26,6 +29,7 @@ class CurrentUserAndIdleTimeoutMiddleware:
     def __call__(self, request):
         # Set current user in thread-local storage
         _thread_locals.user = request.user
+        _thread_locals.request = request
 
         if request.user.is_authenticated:
             timeout = getattr(settings, 'SESSION_IDLE_TIMEOUT', 600)  # 10 min default
@@ -45,6 +49,8 @@ class CurrentUserAndIdleTimeoutMiddleware:
         # Clean up
         if hasattr(_thread_locals, 'user'):
             del _thread_locals.user
+        if hasattr(_thread_locals, 'request'):
+            del _thread_locals.request
 
         return response
 
@@ -121,3 +127,44 @@ class DynamicPermissionMiddleware(MiddlewareMixin):
                 return model
         return None
 
+
+class ActiveCompanyMiddleware(MiddlewareMixin):
+    """
+    Ensure session['active_company_id'] exists (using default if not)
+    and sets request.active_company for easy access in templates/views.
+    """
+    def process_request(self, request):
+        request.active_company = None  # default
+
+        if not request.user.is_authenticated:
+            return
+
+        # Lazy import to avoid circular import
+        from .models import Company
+
+        session_company_id = request.session.get('active_company_id')
+
+        if session_company_id:
+            try:
+                request.active_company = Company.objects.get(pk=session_company_id)
+                return
+            except Company.DoesNotExist:
+                request.active_company = None  # fallback to profile
+
+        profile = getattr(request.user, "profile", None)
+        if not profile:
+            return
+
+        # Use default company
+        if profile.default_company:
+            request.active_company = profile.default_company
+            request.session['active_company_id'] = profile.default_company.id
+            request.session.modified = True
+            return
+
+        # Use first company assigned
+        first_company = profile.company.first()
+        if first_company:
+            request.active_company = first_company
+            request.session['active_company_id'] = first_company.id
+            request.session.modified = True

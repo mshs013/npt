@@ -122,19 +122,23 @@ def dynamic_view(request, app_name, model_name, context):
     title = context.get('title', model._meta.verbose_name)
     per_page = context.get('per_page', 10)  # <-- page size from context, default 10
 
-    # Read submitted filter values from POST and keep only non-empty ones
+    # Choose correct data source (POST if it has data, otherwise GET)
+    data = request.POST if request.method == 'POST' and request.POST else request.GET
+
+    # Read submitted filter values (only non-empty)
     submitted_filters = {
-        field: request.POST.get(field, "").strip()
+        field: data.get(field, "").strip()
         for field in list_filter
-        if request.POST.get(field, "").strip() != ""
+        if data.get(field, "").strip() != ""
     }
 
     # Read search box value
-    search_query = request.POST.get('q', '').strip()
+    search_query = data.get('q', '').strip()
 
     # Get sorting parameters
-    sort_field = request.GET.get('sort')
-    sort_order = request.GET.get('order', 'asc')
+    sort_field = data.get('sort')
+    sort_order = data.get('order', 'asc')
+
     valid_fields = [f.name for f in model._meta.fields]
     sort_field = sort_field if sort_field in valid_fields else None
 
@@ -149,6 +153,10 @@ def dynamic_view(request, app_name, model_name, context):
 
     # Build the queryset with select_related and prefetch_related
     queryset = model.objects.filter(query_filters, **pre_filter)
+
+    #filer current company
+    if hasattr(model, 'company') and hasattr(request, 'active_company') and request.active_company:
+        queryset = queryset.filter(company=request.active_company)
 
     # Get the related fields for your model
     select_related_fields, prefetch_related_fields = get_related_fields(model, list_display)
@@ -426,22 +434,29 @@ def dynamic_trashed_view(request, app_name, model_name, context):
     title = context.get('title', f"Trashed {model._meta.verbose_name}")
     per_page = context.get('per_page', 10)  # <-- page size from context, default 10
 
-    # Get filter parameters
-    filters = {field: request.POST.get(field, None) for field in list_filter}
+    # Choose correct data source (POST if it has data, otherwise GET)
+    data = request.POST if request.method == 'POST' and request.POST else request.GET
 
-    # Get search parameters
-    search_query = request.POST.get('q', '')
+    # Read submitted filter values (only non-empty)
+    submitted_filters = {
+        field: data.get(field, "").strip()
+        for field in list_filter
+        if data.get(field, "").strip() != ""
+    }
+
+    # Read search box value
+    search_query = data.get('q', '').strip()
 
     # Get sorting parameters
-    sort_field = request.GET.get('sort', None)
-    sort_order = request.GET.get('order', 'asc')  # Default to ascending
+    sort_field = data.get('sort')
+    sort_order = data.get('order', 'asc')
     valid_fields = [f.name for f in model._meta.fields]
 
     if sort_field not in valid_fields:
         sort_field = None
 
     # Apply filters and search
-    query_filters = apply_filters(model, filters)
+    query_filters = apply_filters(model, submitted_filters)
 
     # Apply search filter
     if search_query:

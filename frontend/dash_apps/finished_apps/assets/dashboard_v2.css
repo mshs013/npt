@@ -1,0 +1,9 @@
+/* Light blue header for all tables */
+.table thead {
+    background-color: #e3f2fd; /* Bootstrap light blue shade */
+}
+
+/* Red header only for inactive machines table */
+#inactive-machines-table thead {
+    background-color: #f8d7da; /* Bootstrap light red shade */
+}

@@ -3,7 +3,7 @@ from dash import html, dcc, dash_table
 from dash.dependencies import Input, Output
 import dash_bootstrap_components as dbc
 from django_plotly_dash import DjangoDash
-from core.models import ProcessedNPT, RotationStatus, Machine
+from core.models import ProcessedNPT, RotationStatus, Machine, NptReason
 from library.models import Shift
 from core.utils.utils import get_user_machines
 from django.contrib.auth.models import AnonymousUser
@@ -13,11 +13,12 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta, date, time
 
-from frontend.utils.function_chart_helper import process_npt_to_hourly
+
+from frontend.utils.function_chart_helper import process_npt_to_hourly, get_reason_color_map
 from frontend.utils.function_filter import skip_null_on_time_except_last
 
 app = DjangoDash(
-    "MachineDashboard_v2",
+    "MachineDashboard_v3",
     serve_locally=True,
 )
 
@@ -200,28 +201,29 @@ def generate_dashboard_data(user=None):
         machines = Machine.objects.none()
     else:
         machines = get_user_machines(user)
+    
+    current_datetime = datetime.now()
 
-    # Fetch NPT and Rotation data filtered by user's machines
-    current_date = date.today() 
-    # current_date = date.today() - timedelta(days=2)
-    start_of_day = datetime.combine(current_date, time.min)
-    end_of_day = datetime.combine(current_date, time.max)
+    if current_datetime.time() >= time(6, 0):
+        day_start = datetime.combine(current_datetime.date(), time(6, 0))
+        day_end = datetime.combine(current_datetime.date() + timedelta(days=1), time(5, 59, 59))
+    else:
+        day_start = datetime.combine(current_datetime.date() - timedelta(days=1), time(6, 0))
+        day_end = datetime.combine(current_datetime.date(), time(5, 59, 59))
 
-    # Fetch NPT and Rotation data filtered by user's machines and current date
-    npt_qs = ProcessedNPT.objects.select_related('machine', 'reason')\
-        .filter(
-            machine__in=machines,
-            off_time__gte=start_of_day,
-            off_time__lte=end_of_day
-        )
+    # --- RotationStatus queryset filtered by user machines and default datetime range ---
+    rot_qs = RotationStatus.objects.select_related('machine').filter(
+        machine__in=machines,
+        count_time__gte=day_start,
+        count_time__lte=day_end
+    )
 
-    rot_qs = RotationStatus.objects.select_related('machine')\
-        .filter(
-            machine__in=machines,
-            count_time__gte=start_of_day,
-            count_time__lte=end_of_day
-        )
-    shifts = Shift.objects.all()
+    # --- ProcessedNPT queryset filtered by user machines and default datetime range ---
+    npt_qs = ProcessedNPT.objects.select_related('machine', 'reason').filter(
+        machine__in=machines,
+        off_time__gte=day_start,
+        off_time__lte=day_end
+    )
 
     # removing null values
     npt_qs = skip_null_on_time_except_last(npt_qs)
@@ -254,6 +256,8 @@ def generate_dashboard_data(user=None):
     # ---------------------
     # Determine shift
     # ---------------------
+    shifts = Shift.objects.all()
+
     # Replace your get_shift function with this simpler version:
     def get_shift(dt):
         dt_time = dt.time()
@@ -422,7 +426,9 @@ def generate_dashboard_data(user=None):
             total_npt = row['total_npt']
             
             if shift_name in shift_duration_map:
-                shift_duration = shift_duration_map[shift_name]
+                shift_duration = shift_duration_map[shift_name]*len(active_machines)
+                print("shift Duration: ", shift_duration_map[shift_name])
+                print("Shift Duration for all machines: ", shift_duration)
                 # Performance = (Productive Time / Total Shift Time) * 100
                 # Productive Time = Shift Duration - NPT Time
                 performance = ((shift_duration - total_npt) / shift_duration) * 100
@@ -452,9 +458,14 @@ def generate_dashboard_data(user=None):
         # Figures
         # ---------------------
 
+        # get reason-color mappings
+        reason_color_map = get_reason_color_map(NptReason)
+
+
         # Global labels for consistent axis and legend naming
         common_labels = {
             "machine_label": "Machine",
+            "Machine Number": "Machine",
             "npt_time": "NPT",
             "reason": "Reason",
             "shift_name": "Shift",
@@ -491,11 +502,8 @@ def generate_dashboard_data(user=None):
 
         # Stacked Machine-Reason bar chart
         npt_machine_reason = npt_df.groupby(['machine_label', 'reason'])['npt_time'].sum().reset_index()
-
-        # Add formatted NPT
         npt_machine_reason['npt_time_formatted'] = format_seconds_series(npt_machine_reason['npt_time'])
 
-        # Build stacked bar chart directly (no pivot needed)
         fig_npt_by_machine_reason = px.bar(
             npt_machine_reason,
             x="machine_label",
@@ -503,7 +511,8 @@ def generate_dashboard_data(user=None):
             color="reason",
             title="NPT by Machine (Stacked by Reason)",
             labels=common_labels,
-            custom_data=["npt_time_formatted"]   # pass formatted data to hover
+            custom_data=["npt_time_formatted"],
+            color_discrete_map=reason_color_map  # Apply custom colors
         )
 
         fig_npt_by_machine_reason.update_traces(
@@ -512,17 +521,6 @@ def generate_dashboard_data(user=None):
                         "<b>NPT Time:</b> %{customdata[0]}<extra></extra>"
         )
 
-        # # Add total annotations at the end of each bar
-        # for i, (machine, total) in enumerate(machine_totals.items()):
-        #     fig_npt_by_machine_reason.add_annotation(
-        #         x=machine,
-        #         y=total,
-        #         text=f"{format_seconds(total)}",
-        #         showarrow=False,
-        #         yshift=10,
-        #         font=dict(size=10, color="black")
-        #     )
-
         fig_npt_by_machine_reason.update_layout(
             xaxis_title="Machine Number",
             yaxis_title="NPT Time",
@@ -530,20 +528,29 @@ def generate_dashboard_data(user=None):
         )
 
         # NPT by Reason - Pie Chart (no annotations needed for pie charts)
+        npt_reason_summary = npt_df.groupby('reason')['npt_time'].sum().reset_index()
+        npt_reason_summary['npt_time_formatted'] = format_seconds_series(npt_reason_summary['npt_time'])
+        
         fig_npt_by_reason_pie = px.pie(
-            npt_df,
-            names='reason', values='npt_time',
+            npt_reason_summary,
+            names='reason', 
+            values='npt_time',
             title="NPT by Reasons",
-            custom_data=[npt_df['npt_time_formatted']],
-            labels=common_labels
+            labels=common_labels,
+            color='reason',
+            color_discrete_map=reason_color_map  # Apply custom colors
         )
+        
+        # Update hover template with formatted time
         fig_npt_by_reason_pie.update_traces(
-            hovertemplate='<b>%{label}</b><br>NPT Time: %{customdata[0]}<br>Percentage: %{percent}<br><extra></extra>'
+            hovertemplate='<b>%{label}</b><br>NPT Time: %{customdata[0]}<br>Percentage: %{percent}<br><extra></extra>',
+            customdata=npt_reason_summary['npt_time_formatted']
         )
 
         # NPT by Reason - Bar Chart - with annotations
         npt_grouped = npt_df.groupby('reason')['npt_time'].sum().reset_index()
         npt_grouped["npt_time_formatted"] = format_seconds_series(npt_grouped['npt_time'])
+        
         fig_npt_by_reason_bar = px.bar(
             npt_grouped,
             x='reason', 
@@ -551,10 +558,12 @@ def generate_dashboard_data(user=None):
             title="NPT by Reasons",
             color='reason',
             custom_data=[npt_grouped['npt_time_formatted']],
-            labels=common_labels
+            labels=common_labels,
+            color_discrete_map=reason_color_map  # Apply custom colors
         )
+        
         fig_npt_by_reason_bar.update_traces(
-             hovertemplate='<b>%{label}</b><br>NPT Time: %{customdata[0]}<br><extra></extra>'
+            hovertemplate='<b>%{label}</b><br>NPT Time: %{customdata[0]}<br><extra></extra>'
         )
         # Add annotations for each bar
         # for i, row in npt_grouped.iterrows():
@@ -883,37 +892,37 @@ def update_dashboard(n_intervals, callback_context=None, request=None, user=None
         dbc.Row([
             dbc.Col([
                 info_box(f"{format_seconds(total_npt)}", "Total NPT", "bg-info", "fas fa-clock", '')
-            ], className="col-sm-6 col-md-3 mb-3", width=12),
+            ], xs=12, sm=6, md=3, className="mb-3"),
             
             dbc.Col([
                 info_box(str(total_events), "Total Events", "bg-warning", "fas fa-list", '')
-            ], className="col-sm-6 col-md-3 mb-3", width=12),
+            ], xs=12, sm=6, md=3, className="mb-3"),
             
             dbc.Col([
                 info_box(str(active_machines), "Active Machines", "bg-primary", "fas fa-cogs", '')
-            ], className="col-sm-6 col-md-3 mb-3", width=12),
+            ], xs=12, sm=6, md=3, className="mb-3"),
             
             dbc.Col([
                 info_box(str(inactive_machines), "Inactive Machines", "bg-secondary", "fas fa-power-off", '')
-            ], className="col-sm-6 col-md-3 mb-3", width=12),
+            ], xs=12, sm=6, md=3, className="mb-3"),
         ], className="g-3 mb-4"),
         
         # Cards Row 2
         dbc.Row([            
             dbc.Col([
                 info_box(str(total_avg_event_all_machine), "Avg Events for All Machines", "bg-danger", "fas fa-chart-bar", '')
-            ], className="col-sm-6 col-md-3 mb-3", width=12),
+            ], xs=12, sm=6, md=3, className="mb-3"),
             dbc.Col([
                 info_box(f"{total_avg_npt_all_machine}", "Avg NPT for All Machines", "bg-danger", "fas fa-tachometer-alt", '')
-            ], className="col-sm-6 col-md-3 mb-3", width=12),
+            ], xs=12, sm=6, md=3, className="mb-3"),
             
             dbc.Col([
                 info_box(f"{overall_npt_percent}%", "Overall NPT %", "bg-info", "fas fa-exclamation-triangle", '')
-            ], className="col-sm-6 col-md-3 mb-3", width=12),
+            ], xs=12, sm=6, md=3, className="mb-3"),
             
             dbc.Col([
                 info_box(f"{rolls_produced_total}", "Rolls Produced", "bg-secondary", "fas fa-industry", '')
-            ], className="col-sm-6 col-md-3 mb-3", width=12),
+            ], xs=12, sm=6, md=3, className="mb-3"),
         ], className="g-3 mb-4"),
 
         # Charts Row 1 - Machine Charts
@@ -921,26 +930,44 @@ def update_dashboard(n_intervals, callback_context=None, request=None, user=None
             dbc.Col([
                 dbc.Card([
                     dbc.CardBody([
-                        dcc.Graph(figure=figs.get("fig_npt_by_machine", {}), style={"height":"400px"})
+                        html.Div([
+                            dcc.Graph(
+                                figure=figs.get("fig_npt_by_machine", {}), 
+                                style={"height":"400px"},
+                                config={'responsive': True, 'displayModeBar': False}
+                            )
+                        ], style={"overflow-x": "auto"})
                     ], className="p-0")
                 ], className="shadow-sm border-0 h-100")
-            ], width=12, className="col-sm-6 col-lg-4 col-md-6 mb-4"),
+            ], xs=12, sm=12, md=6, lg=4, className="mb-4"),
             
             dbc.Col([
                 dbc.Card([
                     dbc.CardBody([
-                        dcc.Graph(figure=figs.get("fig_machine_perf", {}), style={"height":"400px"})
+                        html.Div([
+                            dcc.Graph(
+                                figure=figs.get("fig_machine_perf", {}), 
+                                style={"height":"400px"},
+                                config={'responsive': True, 'displayModeBar': False}
+                            )
+                        ], style={"overflow-x": "auto"})
                     ], className="p-0")
                 ], className="shadow-sm border-0 h-100")
-            ], width=12, className="col-sm-6 col-lg-4 col-md-6 mb-4"),
+            ], xs=12, sm=12, md=6, lg=4, className="mb-4"),
             
             dbc.Col([
                 dbc.Card([
                     dbc.CardBody([
-                        dcc.Graph(figure=figs.get("fig_npt_by_machine_reason", {}), style={"height":"400px"})
+                        html.Div([
+                            dcc.Graph(
+                                figure=figs.get("fig_npt_by_machine_reason", {}), 
+                                style={"height":"400px"},
+                                config={'responsive': True, 'displayModeBar': False}
+                            )
+                        ], style={"overflow-x": "auto"})
                     ], className="p-0")
                 ], className="shadow-sm border-0 h-100")
-            ], width=12, className="col-sm-6 col-lg-4 col-md-6 mb-4"),
+            ], xs=12, sm=12, md=6, lg=4, className="mb-4"),
         ], className="g-3"),
 
         # Hourly Trend Chart
@@ -948,10 +975,16 @@ def update_dashboard(n_intervals, callback_context=None, request=None, user=None
             dbc.Col([
                 dbc.Card([
                     dbc.CardBody([
-                        dcc.Graph(figure=figs.get("fig_hourly_trend", {}), style={"height":"400px"})
+                        html.Div([
+                            dcc.Graph(
+                                figure=figs.get("fig_hourly_trend", {}), 
+                                style={"height":"400px"},
+                                config={'responsive': True, 'displayModeBar': False}
+                            )
+                        ], style={"overflow-x": "auto"})
                     ], className="p-0")
                 ], className="shadow-sm border-0")
-            ], width=12, className="mb-4")
+            ], xs=12, className="mb-4")
         ]),
 
         # Reason Charts
@@ -959,18 +992,30 @@ def update_dashboard(n_intervals, callback_context=None, request=None, user=None
             dbc.Col([
                 dbc.Card([
                     dbc.CardBody([
-                        dcc.Graph(figure=figs.get("fig_npt_by_reason_bar", {}), style={"height":"400px"})
+                        html.Div([
+                            dcc.Graph(
+                                figure=figs.get("fig_npt_by_reason_bar", {}), 
+                                style={"height":"400px"},
+                                config={'responsive': True, 'displayModeBar': False}
+                            )
+                        ], style={"overflow-x": "auto"})
                     ], className="p-0")
                 ], className="shadow-sm border-0 h-100")
-            ], width=12, className="col-sm-6 col-lg-6 col-md-6 mb-4"),
+            ], xs=12, sm=12, md=6, className="mb-4"),
             
             dbc.Col([
                 dbc.Card([
                     dbc.CardBody([
-                        dcc.Graph(figure=figs.get("fig_npt_by_reason_pie", {}), style={"height":"400px"})
+                        html.Div([
+                            dcc.Graph(
+                                figure=figs.get("fig_npt_by_reason_pie", {}), 
+                                style={"height":"400px"},
+                                config={'responsive': True, 'displayModeBar': False}
+                            )
+                        ], style={"overflow-x": "auto"})
                     ], className="p-0")
                 ], className="shadow-sm border-0 h-100")
-            ], width=12, className="col-sm-6 col-lg-6 col-md-6 mb-4"),
+            ], xs=12, sm=12, md=6, className="mb-4"),
         ], className="g-3"),
 
         # Rotation Counter Chart
@@ -978,10 +1023,16 @@ def update_dashboard(n_intervals, callback_context=None, request=None, user=None
             dbc.Col([
                 dbc.Card([
                     dbc.CardBody([
-                        dcc.Graph(figure=figs.get("fig_hourly_trend_rotation", {}), style={"height":"400px"})
+                        html.Div([
+                            dcc.Graph(
+                                figure=figs.get("fig_hourly_trend_rotation", {}), 
+                                style={"height":"400px"},
+                                config={'responsive': True, 'displayModeBar': False}
+                            )
+                        ], style={"overflow-x": "auto"})
                     ], className="p-0")
                 ], className="shadow-sm border-0")
-            ], width=12, className="mb-4")
+            ], xs=12, className="mb-4")
         ]),
 
         # Shift Charts
@@ -989,26 +1040,44 @@ def update_dashboard(n_intervals, callback_context=None, request=None, user=None
             dbc.Col([
                 dbc.Card([
                     dbc.CardBody([
-                        dcc.Graph(figure=figs.get("fig_shiftwise_trend", {}), style={"height":"400px"})
+                        html.Div([
+                            dcc.Graph(
+                                figure=figs.get("fig_shiftwise_trend", {}), 
+                                style={"height":"400px", "min-width": "700px"},
+                                config={'responsive': True, 'displayModeBar': False}
+                            )
+                        ], style={"overflow-x": "auto", "overflow-y": "hidden"})
                     ], className="p-0")
                 ], className="shadow-sm border-0 h-100")
-            ], width=12, className="col-sm-6 col-lg-6 col-md-6 mb-4"),
+            ], xs=12, sm=12, md=12, lg=6, className="mb-4"),
             
             dbc.Col([
                 dbc.Card([
                     dbc.CardBody([
-                        dcc.Graph(figure=figs.get("fig_npt_by_shift", {}), style={"height":"400px"})
+                        html.Div([
+                            dcc.Graph(
+                                figure=figs.get("fig_npt_by_shift", {}), 
+                                style={"height":"400px", "min-width": "350px"},
+                                config={'responsive': True, 'displayModeBar': False}
+                            )
+                        ], style={"overflow-x": "auto", "overflow-y": "hidden"})
                     ], className="p-0")
                 ], className="shadow-sm border-0 h-100")
-            ], width=12, className="col-sm-6 col-lg-3 col-md-6 mb-4"),
+            ], xs=12, sm=6, md=6, lg=3, className="mb-4"),
             
             dbc.Col([
                 dbc.Card([
                     dbc.CardBody([
-                        dcc.Graph(figure=figs.get("fig_shiftwise_npt", {}), style={"height":"400px"})
+                        html.Div([
+                            dcc.Graph(
+                                figure=figs.get("fig_shiftwise_npt", {}), 
+                                style={"height":"400px", "min-width": "350px"},
+                                config={'responsive': True, 'displayModeBar': False}
+                            )
+                        ], style={"overflow-x": "auto", "overflow-y": "hidden"})
                     ], className="p-0")
                 ], className="shadow-sm border-0 h-100")
-            ], width=12, className="col-sm-6 col-lg-3 col-md-6 mb-4"),
+            ], xs=12, sm=6, md=6, lg=3, className="mb-4"),
         ], className="g-3"),
 
         # Tables Section
@@ -1020,10 +1089,16 @@ def update_dashboard(n_intervals, callback_context=None, request=None, user=None
                         html.H5("Machinewise Performance Summary", className="mb-0 text-dark fw-bold")
                     ], className="bg-light border-bottom"),
                     dbc.CardBody([
-                        tables["machine_summary_table"]
-                    ], className="p-3")
+                        html.Div([
+                            tables["machine_summary_table"]
+                        ], style={
+                            "overflow-x": "auto",
+                            "overflow-y": "auto",
+                            "max-height": "500px"
+                        }, className="table-responsive")
+                    ], className="p-0")
                 ], className="shadow-sm border-0 h-100")
-            ], width=12, className="col-sm-6 col-lg-8 col-md-6 mb-4"),
+            ], xs=12, sm=12, md=12, lg=8, className="mb-4"),
             
             # Inactive Machines Table
             dbc.Col([
@@ -1032,10 +1107,16 @@ def update_dashboard(n_intervals, callback_context=None, request=None, user=None
                         html.H5("Inactive Machines List", className="mb-0 text-dark fw-bold")
                     ], className="bg-light border-bottom"),
                     dbc.CardBody([
-                        tables["inactive_machines_table"]
-                    ], className="p-3")
+                        html.Div([
+                            tables["inactive_machines_table"]
+                        ], style={
+                            "overflow-x": "auto",
+                            "overflow-y": "auto",
+                            "max-height": "500px"
+                        }, className="table-responsive")
+                    ], className="p-0")
                 ], className="shadow-sm border-0 h-100")
-            ], width=12, className="col-sm-6 col-lg-4 col-md-6 mb-4"),
+            ], xs=12, sm=12, md=12, lg=4, className="mb-4"),
         ], className="g-3"),
 
         # Shift Summary Table
@@ -1046,10 +1127,16 @@ def update_dashboard(n_intervals, callback_context=None, request=None, user=None
                         html.H5("Shiftwise Performance Summary", className="mb-0 text-dark fw-bold")
                     ], className="bg-light border-bottom"),
                     dbc.CardBody([
-                        tables["shift_summary_table"]
-                    ], className="p-3")
+                        html.Div([
+                            tables["shift_summary_table"]
+                        ], style={
+                            "overflow-x": "auto",
+                            "overflow-y": "auto",
+                            "max-height": "500px"
+                        }, className="table-responsive")
+                    ], className="p-0")
                 ], className="shadow-sm border-0")
-            ], width=12, className="mb-4")
+            ], xs=12, className="mb-4")
         ]),
 
         # Reason Summary Table
@@ -1060,9 +1147,15 @@ def update_dashboard(n_intervals, callback_context=None, request=None, user=None
                         html.H5("Reasonwise NPT Summary", className="mb-0 text-dark fw-bold")
                     ], className="bg-light border-bottom"),
                     dbc.CardBody([
-                        tables["npt_summary_table"]
-                    ], className="p-3")
+                        html.Div([
+                            tables["npt_summary_table"]
+                        ], style={
+                            "overflow-x": "auto",
+                            "overflow-y": "auto",
+                            "max-height": "500px"
+                        }, className="table-responsive")
+                    ], className="p-0")
                 ], className="shadow-sm border-0")
-            ], width=12, className="mb-4")
+            ], xs=12, className="mb-4")
         ])
-    ], fluid=True, className="py-4")
+    ], fluid=True, className="py-4") 
