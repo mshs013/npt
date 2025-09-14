@@ -44,8 +44,12 @@
             <aside class="main-sidebar sidebar-dark-primary elevation-4">
                 <!-- Brand Logo -->
                 <a href="{% url 'home' %}" class="brand-link">
-                    <img src="{% static 'adminlte/dist/img/preloader-logo.png' %}" alt="OCMS Logo" class="brand-image img-circle elevation-3" style="opacity: .8">
-                    <span class="brand-text font-weight-light">OCMS</span>
+                    <img src="{% if request.active_company and request.active_company.logo %}{{ request.active_company.logo.url }}{% else %}{% static 'adminlte/dist/img/preloader-logo.png' %}{% endif %}" 
+                        alt="{{ request.active_company.name|default:'OCMS' }} Logo" 
+                        class="brand-image img-circle elevation-3" style="opacity: .8">
+                    <span class="brand-text font-weight-light">
+                        {{ request.active_company.name|default:"OCMS" }}
+                    </span>
                 </a>
                 <!-- Sidebar content here -->
                 {% include 'core/sidebar-menu.html' %}
