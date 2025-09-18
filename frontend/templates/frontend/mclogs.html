@@ -1,6 +1,6 @@
 <!-- library/templates/library/mclogs.html -->
 {% extends "core/base.html" %}
-{% load static %}
+{% load static custom_tags custom_pagination i18n %}
 {% block extra_css %}
     {{  block.super }}
     <link rel="stylesheet" href="{% static 'adminlte/plugins/tempusdominus-bootstrap-4/css/tempusdominus-bootstrap-4.min.css' %}">
@@ -15,22 +15,23 @@
 {% block content %}
 
 <!-- Filter Panel -->
-<div style="display: flex; justify-content: end;">
-    <button class="btn btn-secondary" onclick="toggleFilters()">
-        <i class="bi bi-funnel"></i> <span id="toggleText">Hide Filters</span>
-    </button>
-</div>
-
-<div class="card" id="filterPanelCard">
+<div class="card shadow-sm mb-4">
     <div class="card-header">
-        <h3 class="card-title"><i class="bi bi-filter-circle"></i> Filter Options</h3>
+        <h3 class="card-title mb-0">
+            <i class="fas fa-filter"></i> Filter Options
+        </h3>
+        <div class="card-tools">
+            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                <i class="fas fa-minus"></i>
+            </button>
+        </div>
     </div>
     <div class="card-body">
         <form method="GET" id="filterForm">
             <div class="row">
                 <div class="col-md-4">
                     <div class="form-group">
-                        <label for="machine">Machine:</label>
+                        <label for="machine" class="font-weight-bold">Machine:</label>
                         <select class="form-control" name="machine" id="machine">
                             <option value="">All Machines</option>
                             {% for machine in filter_machines %}
@@ -43,9 +44,10 @@
                 </div>
                 <div class="col-md-4">
                     <div class="form-group">
-                        <label for="reason">Reason:</label>
+                        <label for="reason" class="font-weight-bold">Reason:</label>
                         <select class="form-control" name="reason" id="reason">
                             <option value="">All Reasons</option>
+                            <option value="null">N/A</option>
                             {% for reason in filter_reasons %}
                                 <option value="{{ reason.id }}" {% if request.GET.reason == reason.id|stringformat:'s' %}selected{% endif %}>
                                     {{ reason.name }}
@@ -56,12 +58,12 @@
                 </div>
                 <div class="col-md-4">
                     <div class="form-group">
-                        <label for="shift">Shift:</label>
+                        <label for="shift" class="font-weight-bold">Shift:</label>
                         <select class="form-control" name="shift" id="shift">
                             <option value="">All Shifts</option>
                             {% for shift in filter_shifts %}
                                 <option value="{{ shift.id }}" {% if request.GET.shift == shift.id|stringformat:'s' %}selected{% endif %}>
-                                    {{ shift }}
+                                     {{ shift.name }} ({{ shift.start_time|time:"H:i" }} - {{ shift.end_time|time:"H:i" }})
                                 </option>
                             {% endfor %}
                         </select>
@@ -70,31 +72,45 @@
             </div>
             <div class="row">
                 <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="datetime_from" class="font-weight-bold">From DateTime:</label>
-                                <div class="input-group date" id="datetime_from" data-target-input="nearest">
-                                    <input type="text" class="form-control datetimepicker-input" data-toggle="datetimepicker" data-target="#datetime_from" name="datetime_from" value="{{ datetime_from }}">
-                                    <div class="input-group-append" data-target="#datetime_from" data-toggle="datetimepicker">
-                                        <div class="input-group-text"><i class="fa fa-calendar"></i></div>
-                                    </div>
-                                </div>
+                    <div class="form-group">
+                        <label for="datetime_from" class="font-weight-bold">From DateTime:</label>
+                        <div class="input-group date" id="datetime_from" data-target-input="nearest">
+                            <input type="text" class="form-control datetimepicker-input" data-toggle="datetimepicker" data-target="#datetime_from" name="datetime_from" value="{{ datetime_from }}">
+                            <div class="input-group-append" data-target="#datetime_from" data-toggle="datetimepicker">
+                                <div class="input-group-text"><i class="fa fa-calendar"></i></div>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="datetime_to" class="font-weight-bold">To DateTime:</label>
-                                <div class="input-group date" id="datetime_to" data-target-input="nearest">
-                                    <input type="text" class="form-control datetimepicker-input" data-toggle="datetimepicker" data-target="#datetime_to" name="datetime_to" value="{{ datetime_to }}">
-                                    <div class="input-group-append" data-target="#datetime_to" data-toggle="datetimepicker">
-                                        <div class="input-group-text"><i class="fa fa-calendar"></i></div>
-                                    </div>
-                                </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="datetime_to" class="font-weight-bold">To DateTime:</label>
+                        <div class="input-group date" id="datetime_to" data-target-input="nearest">
+                            <input type="text" class="form-control datetimepicker-input" data-toggle="datetimepicker" data-target="#datetime_to" name="datetime_to" value="{{ datetime_to }}">
+                            <div class="input-group-append" data-target="#datetime_to" data-toggle="datetimepicker">
+                                <div class="input-group-text"><i class="fa fa-calendar"></i></div>
                             </div>
                         </div>
+                    </div>
+                </div>
             </div>
-            <div class="form-group">
-                <button type="submit" class="btn btn-primary">Apply Filters</button>
-                <a href="{% url 'view_mclog' %}" class="btn btn-secondary">Reset Filters</a>
+            <div class="row">
+                <div class="col-12">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="form-group mb-0">
+                            <button type="submit" class="btn btn-primary" >
+                                <i class="fas fa-search"></i> Apply Filters
+                            </button>
+                            <a href="{% url 'view_mclog' %}" class="btn btn-secondary">
+                                <i class="fas fa-undo"></i> Reset Filters
+                            </a>
+                        </div>
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i> 
+                            Use datetime inputs for precise filtering.
+                        </small>
+                    </div>
+                </div>
             </div>
         </form>
     </div>
@@ -152,7 +168,7 @@
                     <tr class="table-secondary">
                         <td colspan="{{ footer_colspan }}">Total</td>
                         <td>{{ total_npt_all }} </td>
-                        <td>-</td>
+                        <td>{{ total_npt_percentage }} %</td>
                     </tr>
             </tfoot>
             </table>
@@ -180,7 +196,7 @@
         </div>
     </div>
     <div class="card-body">
-        {% if npt_data %}
+        {% if page_obj %}
         <div class="table-responsive">
             <table class="table table-striped table-hover table-bordered" id="nptTable">
                 <thead>
@@ -194,24 +210,27 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for record in npt_data %}
+                    {% for record in page_obj %}
                     <tr>
-                        <td>{{ forloop.counter }}</td>
-                        <td>{{ record.machine }}</td>
-                        <td>{{ record.reason }}</td>
-                        <td>{{ record.offTime|date:"M d, Y H:i" }}</td>
+                         <td>{{ forloop.counter0|add:page_obj.start_index }}</td>
+                        <td>{{ record.machine.mc_no }}</td>
+                        <td>{{ record.reason.name|default:"N/A" }}</td>
+                        <td>{{ record.off_time|date:"M d, Y H:i" }}</td>
                         <td>
-                            {% if record.onTime %}
-                                {{ record.onTime|date:"M d, Y H:i" }}
+                            {% if record.on_time %}
+                                {{ record.on_time|date:"M d, Y H:i" }}
                             {% else %}
                                 <span class="text-muted">Still off</span>
                             {% endif %}
                         </td>
-                        <td>{{ record.duration|floatformat:0 }}</td>
+                        <td>{{ record.get_duration.total_seconds|floatformat:0 }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
+        <div class="col-12">
+            {% custom_pagination %}
         </div>
         {% else %}
         <div class="alert alert-info">
@@ -219,12 +238,6 @@
             No NPT records found for selected filters.
         </div>
         {% endif %}
-    </div>
-    <div class="card-footer">
-        <small class="text-muted">
-            Total records: {{ npt_data|length }}
-            {% if filtered_count %}| Filtered from {{ total_count }} total records{% endif %}
-        </small>
     </div>
 </div>
 
@@ -236,18 +249,23 @@
 <script type="text/javascript" src="{% static 'adminlte/plugins/tempusdominus-bootstrap-4/js/tempusdominus-bootstrap-4.min.js' %}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
-function toggleFilters() {
-    const filterCard = document.getElementById('filterPanelCard');
-    const toggleText = document.getElementById('toggleText');
-    
-    if (filterCard.style.display === 'none') {
-        filterCard.style.display = 'block';
-        toggleText.textContent = 'Hide Filters';
-    } else {
-        filterCard.style.display = 'none';
-        toggleText.textContent = 'Show Filters';
-    }
-}
+
+setInterval(() => {
+    // Get current time
+    const now = new Date();
+
+    // Format it the same way your datetimepicker expects
+    // (your config uses format: 'DD/MM/YYYY h:mm A')
+    const formatted = moment(now).format('DD/MM/YYYY h:mm A');
+
+    // Update the "To DateTime" input field
+    document.querySelector('input[name="datetime_to"]').value = formatted;
+
+    // Submit the filter form
+    document.getElementById("filterForm").submit();
+
+}, 60000); // 60 seconds
+
 
 function downloadExcel() {
     const table = document.getElementById('nptTable');

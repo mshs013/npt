@@ -1,12 +1,10 @@
 from django.db import models
-from core.models import Company
-from core.mixins import CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel
+from core.mixins import CompanyScopedModel, CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel
     
-class Shift(CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
+class Shift(CompanyScopedModel, CreatedInfoModel, UpdatedInfoModel, SoftDeleteModel):
     name = models.CharField(max_length=150, unique=True)
     start_time = models.TimeField()
     end_time = models.TimeField()
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="shift_company")
 
     class Meta:
         verbose_name = "Shift"

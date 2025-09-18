@@ -6,6 +6,7 @@ import signal
 import sys
 import threading
 import time
+import os
 from zoneinfo import ZoneInfo
 from collections import defaultdict
 from dataclasses import dataclass
@@ -40,6 +41,7 @@ FLUSH_INTERVAL_SEC = 5.0
 REASON_REFRESH_SEC = 3600
 MC_REFRESH_SEC = 3600
 STATS_INTERVAL_SEC = 5
+BUFFER_DIR = "/var/www/ilife/mqtt_buffer"
 
 
 def epoch_ms_to_dt(ts_ms: int) -> datetime:
@@ -118,6 +120,9 @@ class Ingestor:
         self.client.reconnect_delay_set(min_delay=1, max_delay=30)
         self.keepalive = 60
 
+        # Ensure buffer directory exists
+        os.makedirs(BUFFER_DIR, exist_ok=True)
+
     # ---------- MQTT callbacks ----------
     def on_connect(self, client, userdata, flags, rc, properties=None):
         if rc == 0:
@@ -181,6 +186,36 @@ class Ingestor:
                     return
                 time.sleep(0.1)
 
+    # ---------- Disk buffer helpers ----------
+    def _buffer_file_path(self, prefix: str) -> str:
+        timestamp = int(time.time() * 1000)
+        return os.path.join(BUFFER_DIR, f"{prefix}_{timestamp}.json")
+
+    def _append_to_buffer(self, prefix: str, data: Dict[str, Any]) -> None:
+        try:
+            path = self._buffer_file_path(prefix)
+            with open(path, "w") as f:
+                json.dump(data, f)
+        except Exception as e:
+            LOG.error("Failed writing buffer file: %s", e)
+
+    def _flush_buffer_file(self, filepath: str) -> None:
+        try:
+            with open(filepath) as f:
+                data = json.load(f)
+            if os.path.basename(filepath).startswith("rotation_"):
+                self.handle_rotation(data)
+            else:
+                self.handle_mc_status(data)
+            os.remove(filepath)
+        except Exception as e:
+            LOG.error("Failed flushing buffer file %s: %s", filepath, e)
+
+    def flush_all_buffers(self):
+        for fname in os.listdir(BUFFER_DIR):
+            path = os.path.join(BUFFER_DIR, fname)
+            self._flush_buffer_file(path)
+
     # ---------- Handlers ----------
     def handle_mc_status(self, data: Dict[str, Any]) -> None:
         try:
@@ -190,12 +225,14 @@ class Ingestor:
         except Exception as e:
             LOG.error("Invalid mc-status payload: %s (data=%s)", e, data)
             self.stats["mc_status_bad"] += 1
+            self._append_to_buffer("on" if data.get("status")=="on" else "off", data)
             return
 
         machine = self.machine_map.get(mc_raw)
         if not machine:
             LOG.warning("MC %s not found in machine map", mc_raw)
             self.stats["mc_unknown"] += 1
+            self._append_to_buffer("on" if status=="on" else "off", data)
             return
 
         try:
@@ -214,16 +251,22 @@ class Ingestor:
                             self.q_off.put_nowait(obj)
                             self.stats["off_enqueued"] += 1
                         except Full:
-                            LOG.error("Queue full: dropping OFF event mc=%s ts=%s", mc_raw, ts.isoformat())
+                            LOG.error("Queue full: dropping OFF event mc=%s ts=%s, saving to buffer", mc_raw, ts.isoformat())
                             self.stats["off_dropped"] += 1
+                            self._append_to_buffer("off", data)
                     else:
                         LOG.info("Skipping OFF enqueue: last ON not closed for mc=%s", mc_raw)
 
                 elif status == "on":
                     if last_row and last_row.on_time is None:
-                        last_row.on_time = ts
-                        last_row.save(update_fields=["on_time"])
-                        self.stats["on_closed"] += 1
+                        try:
+                            last_row.on_time = ts
+                            last_row.save(update_fields=["on_time"])
+                            self.stats["on_closed"] += 1
+                        except Exception as e:
+                            LOG.error("ON update failed for mc=%s, saving to buffer: %s", mc_raw, e)
+                            self.stats["on_failed"] += 1
+                            self._append_to_buffer("on", data)
                     else:
                         LOG.info("Skipping ON update: no row to update or on_time already set for mc=%s", mc_raw)
 
@@ -233,23 +276,31 @@ class Ingestor:
                     except Exception:
                         LOG.error("Invalid/missing btn in data: %s", data)
                         self.stats["btn_bad"] += 1
+                        self._append_to_buffer("btn", data)
                         return
 
                     reason_id = self.reason_map.get(btn)
                     if reason_id is None:
                         LOG.warning("Btn %s not mapped to reason (mc=%s)", btn, mc_raw)
                         self.stats["btn_unmapped"] += 1
+                        self._append_to_buffer("btn", data)
                         return
 
                     if last_row and last_row.reason_id is None:
-                        last_row.reason_id = reason_id
-                        last_row.save(update_fields=["reason_id"])
-                        self.stats["btn_applied"] += 1
+                        try:
+                            last_row.reason_id = reason_id
+                            last_row.save(update_fields=["reason_id"])
+                            self.stats["btn_applied"] += 1
+                        except Exception as e:
+                            LOG.error("BTN update failed for mc=%s, saving to buffer: %s", mc_raw, e)
+                            self.stats["btn_failed"] += 1
+                            self._append_to_buffer("btn", data)
                     else:
                         LOG.info("Skipping BTN update: no row or reason_id already set for mc=%s", mc_raw)
 
         except Exception as e:
             LOG.exception("Error handling MC status event: %s", e)
+            self._append_to_buffer("on" if status=="on" else "off", data)
 
     def handle_rotation(self, data: Dict[str, Any]) -> None:
         try:
@@ -259,12 +310,14 @@ class Ingestor:
         except Exception as e:
             LOG.error("Invalid rotation payload: %s (data=%s)", e, data)
             self.stats["rotation_bad"] += 1
+            self._append_to_buffer("rotation", data)
             return
 
         machine = self.machine_map.get(mc_raw)
         if not machine:
             LOG.warning("Rotation MC %s not found in machine map", mc_raw)
             self.stats["rotation_unknown"] += 1
+            self._append_to_buffer("rotation", data)
             return
 
         msg = RotationMsg(machine=machine, rotation=rotation, ts=ts)
@@ -272,157 +325,67 @@ class Ingestor:
             self.q_rotation.put_nowait(msg)
             self.stats["rotation_enqueued"] += 1
         except Full:
-            LOG.error("Queue full: dropping ROTATION mc=%s ts=%s", mc_raw, ts.isoformat())
+            LOG.error("Queue full: dropping ROTATION mc=%s ts=%s, saving to buffer", mc_raw, ts.isoformat())
             self.stats["rotation_dropped"] += 1
+            self._append_to_buffer("rotation", data)
 
     # ---------- Worker threads ----------
     def worker_flush_rotation(self):
-        batch: List[RotationMsg] = []
-        last_flush = time.time()
         while not self.shutdown.is_set():
-            timeout = max(0.0, FLUSH_INTERVAL_SEC - (time.time() - last_flush))
+            batch: List[RotationStatus] = []
             try:
-                batch.append(self.q_rotation.get(timeout=timeout))
+                while len(batch) < BATCH_SIZE_ROTATION:
+                    msg = self.q_rotation.get(timeout=FLUSH_INTERVAL_SEC)
+                    batch.append(RotationStatus(machine=msg.machine, rotation=msg.rotation, timestamp=msg.ts))
             except Empty:
                 pass
 
-            if len(batch) >= BATCH_SIZE_ROTATION or (batch and time.time() - last_flush >= FLUSH_INTERVAL_SEC):
+            if batch:
                 try:
-                    objs = [RotationStatus(machine=x.machine, count=x.rotation, count_time=x.ts) for x in batch]
-                    RotationStatus.objects.bulk_create(objs, ignore_conflicts=True, batch_size=1000)
-                    self.stats["rotation_flushed"] += len(objs)
+                    RotationStatus.objects.bulk_create(batch)
+                    self.stats["rotation_flushed"] += len(batch)
                 except Exception as e:
-                    LOG.error("Rotation bulk_create failed: %s", e)
-                batch.clear()
-                last_flush = time.time()
-
-        # Final flush
-        if batch:
-            try:
-                objs = [RotationStatus(machine=x.machine, count=x.rotation, count_time=x.ts) for x in batch]
-                RotationStatus.objects.bulk_create(objs, ignore_conflicts=True, batch_size=1000)
-                self.stats["rotation_flushed"] += len(objs)
-            except Exception as e:
-                LOG.error("Rotation final flush failed: %s", e)
+                    LOG.error("Failed flush rotation batch: %s", e)
+                    for msg in batch:
+                        self._append_to_buffer("rotation", {"mc": msg.machine.device_mc, "rotation": msg.rotation, "timestamp": int(msg.ts.timestamp()*1000)})
 
     def worker_flush_off(self):
-        batch: List[ProcessedNPT] = []
-        last_flush = time.time()
         while not self.shutdown.is_set():
-            timeout = max(0.0, FLUSH_INTERVAL_SEC - (time.time() - last_flush))
+            batch: List[ProcessedNPT] = []
             try:
-                batch.append(self.q_off.get(timeout=timeout))
+                while len(batch) < BATCH_SIZE_OFF:
+                    obj = self.q_off.get(timeout=FLUSH_INTERVAL_SEC)
+                    batch.append(obj)
             except Empty:
                 pass
 
-            if len(batch) >= BATCH_SIZE_OFF or (batch and time.time() - last_flush >= FLUSH_INTERVAL_SEC):
+            if batch:
                 try:
-                    ProcessedNPT.objects.bulk_create(batch, ignore_conflicts=True, batch_size=500)
+                    ProcessedNPT.objects.bulk_create(batch)
                     self.stats["off_flushed"] += len(batch)
                 except Exception as e:
-                    LOG.error("OFF bulk_create failed: %s", e)
-                batch.clear()
-                last_flush = time.time()
-
-        if batch:
-            try:
-                ProcessedNPT.objects.bulk_create(batch, ignore_conflicts=True, batch_size=500)
-                self.stats["off_flushed"] += len(batch)
-            except Exception as e:
-                LOG.error("OFF final flush failed: %s", e)
+                    LOG.error("Failed flush OFF batch: %s", e)
+                    for obj in batch:
+                        self._append_to_buffer("off", {"mc": obj.machine.device_mc, "status": "off", "timestamp": int(obj.off_time.timestamp()*1000)})
 
     def worker_apply_on(self):
         while not self.shutdown.is_set():
             try:
-                msg = self.q_on.get(timeout=0.2)
-            except Empty:
-                continue
-            try:
-                with transaction.atomic():
-                    rec = (
-                        ProcessedNPT.objects
-                        .select_for_update(skip_locked=True)
-                        .filter(machine=msg.machine, on_time__isnull=True)
-                        .order_by("-off_time")
-                        .first()
-                    )
-                    if rec:
-                        if msg.ts >= rec.off_time:
-                            rec.on_time = msg.ts
-                            if getattr(msg, "reason_id", None) is not None:
-                                rec.reason_id = msg.reason_id
-                                rec.save(update_fields=["on_time", "reason_id"])
-                            else:
-                                rec.save(update_fields=["on_time"])
+                msg: McStatusMsg = self.q_on.get(timeout=FLUSH_INTERVAL_SEC)
+                try:
+                    with transaction.atomic():
+                        last_row = ProcessedNPT.objects.select_for_update(skip_locked=True).filter(machine=msg.machine).order_by("-off_time").first()
+                        if last_row and last_row.on_time is None:
+                            last_row.on_time = msg.ts
+                            last_row.save(update_fields=["on_time"])
                             self.stats["on_closed"] += 1
                         else:
-                            self.stats["on_out_of_order"] += 1
-                    else:
-                        self.stats["on_no_open"] += 1
-            except Exception as e:
-                LOG.error("Applying ON failed for mc=%s: %s", msg.machine, e)
-                self.stats["on_failed"] += 1
-
-    # ---------- Final flush ----------
-    def flush(self):
-        LOG.info("Starting final flush of queues...")
-
-        # Rotation
-        batch_rot: List[RotationMsg] = []
-        while True:
-            try:
-                batch_rot.append(self.q_rotation.get_nowait())
+                            self.stats["on_no_open"] += 1
+                except Exception as e:
+                    LOG.error("Failed apply ON msg: %s", e)
+                    self._append_to_buffer("on", {"mc": msg.machine.device_mc, "status": "on", "timestamp": int(msg.ts.timestamp()*1000)})
             except Empty:
-                break
-        if batch_rot:
-            objs = [RotationStatus(machine=x.machine, count=x.rotation, count_time=x.ts) for x in batch_rot]
-            try:
-                RotationStatus.objects.bulk_create(objs, ignore_conflicts=True, batch_size=1000)
-                self.stats["rotation_flushed"] += len(objs)
-            except Exception as e:
-                LOG.exception("Rotation flush failed: %s", e)
-
-        # OFF
-        batch_off: List[ProcessedNPT] = []
-        while True:
-            try:
-                batch_off.append(self.q_off.get_nowait())
-            except Empty:
-                break
-        if batch_off:
-            try:
-                ProcessedNPT.objects.bulk_create(batch_off, ignore_conflicts=True, batch_size=500)
-                self.stats["off_flushed"] += len(batch_off)
-            except Exception as e:
-                LOG.exception("OFF flush failed: %s", e)
-
-        # ON
-        while True:
-            try:
-                msg = self.q_on.get_nowait()
-            except Empty:
-                break
-            try:
-                with transaction.atomic():
-                    rec = (
-                        ProcessedNPT.objects
-                        .select_for_update(skip_locked=True)
-                        .filter(machine=msg.machine, on_time__isnull=True)
-                        .order_by("-off_time")
-                        .first()
-                    )
-                    if rec and msg.ts >= rec.off_time:
-                        rec.on_time = msg.ts
-                        if getattr(msg, "reason_id", None) is not None:
-                            rec.reason_id = msg.reason_id
-                            rec.save(update_fields=["on_time", "reason_id"])
-                        else:
-                            rec.save(update_fields=["on_time"])
-                        self.stats["on_closed"] += 1
-            except Exception as e:
-                LOG.exception("Failed applying ON during final flush: %s", e)
-
-        LOG.info("Final flush complete.")
+                continue
 
     # ---------- Stats ----------
     def _maybe_log_stats(self):
@@ -447,35 +410,96 @@ class Ingestor:
 
     # ---------- Lifecycle ----------
     def start(self):
-        self.t_reason = threading.Thread(target=self.refresh_reason_map, name="reason-map", daemon=True)
-        self.t_mc = threading.Thread(target=self.refresh_machine_map, name="machine-map", daemon=True)
-        self.t_rot = threading.Thread(target=self.worker_flush_rotation, name="rot-worker", daemon=True)
-        self.t_off = threading.Thread(target=self.worker_flush_off, name="off-worker", daemon=True)
-        self.t_on = threading.Thread(target=self.worker_apply_on, name="on-worker", daemon=True)
+        threads = []
 
-        self.t_reason.start()
-        self.t_mc.start()
-        self.t_rot.start()
-        self.t_off.start()
-        self.t_on.start()
+        t_mc = threading.Thread(target=self.refresh_machine_map, daemon=True)
+        t_mc.start()
+        threads.append(t_mc)
 
-        def handle_sigterm(signum, frame):
-            LOG.info("Received signal %s: shutting down...", signum)
-            try:
-                self.stop()
-            except Exception:
-                LOG.exception("Error while stopping on signal")
-            sys.exit(0)
+        t_reason = threading.Thread(target=self.refresh_reason_map, daemon=True)
+        t_reason.start()
+        threads.append(t_reason)
 
-        signal.signal(signal.SIGINT, handle_sigterm)
-        signal.signal(signal.SIGTERM, handle_sigterm)
+        t_rot = threading.Thread(target=self.worker_flush_rotation, daemon=True)
+        t_rot.start()
+        threads.append(t_rot)
+
+        t_off = threading.Thread(target=self.worker_flush_off, daemon=True)
+        t_off.start()
+        threads.append(t_off)
+
+        t_on = threading.Thread(target=self.worker_apply_on, daemon=True)
+        t_on.start()
+        threads.append(t_on)
+
+        # Flush buffers on startup
+        self.flush_all_buffers()
+
+        def handle_sig(signum, frame):
+            LOG.info("Received shutdown signal %s", signum)
+            self.stop()
+
+        signal.signal(signal.SIGINT, handle_sig)
+        signal.signal(signal.SIGTERM, handle_sig)
 
         self.client.connect(self.broker_host, self.broker_port, keepalive=self.keepalive)
-        self.client.loop_forever(retry_first_connection=True)
+        self.client.loop_start()
+
+        while not self.shutdown.is_set():
+            time.sleep(0.5)
+
+        self.client.loop_stop()
+        for t in threads:
+            t.join()
 
     def stop(self):
         self.shutdown.set()
         self.flush()
+
+    def flush(self):
+        LOG.info("Starting final flush of queues and buffers...")
+        self.flush_all_buffers()
+
+        # Flush rotation
+        batch_rot = []
+        while not self.q_rotation.empty():
+            msg = self.q_rotation.get()
+            batch_rot.append(RotationStatus(machine=msg.machine, rotation=msg.rotation, timestamp=msg.ts))
+        if batch_rot:
+            try:
+                RotationStatus.objects.bulk_create(batch_rot)
+                self.stats["rotation_flushed"] += len(batch_rot)
+            except Exception as e:
+                LOG.error("Failed flush final rotation batch: %s", e)
+                for msg in batch_rot:
+                    self._append_to_buffer("rotation", {"mc": msg.machine.device_mc, "rotation": msg.rotation, "timestamp": int(msg.ts.timestamp()*1000)})
+
+        # Flush OFF
+        batch_off = []
+        while not self.q_off.empty():
+            obj = self.q_off.get()
+            batch_off.append(obj)
+        if batch_off:
+            try:
+                ProcessedNPT.objects.bulk_create(batch_off)
+                self.stats["off_flushed"] += len(batch_off)
+            except Exception as e:
+                LOG.error("Failed flush final OFF batch: %s", e)
+                for obj in batch_off:
+                    self._append_to_buffer("off", {"mc": obj.machine.device_mc, "status": "off", "timestamp": int(obj.off_time.timestamp()*1000)})
+
+        # Flush ON
+        while not self.q_on.empty():
+            msg: McStatusMsg = self.q_on.get()
+            try:
+                with transaction.atomic():
+                    last_row = ProcessedNPT.objects.select_for_update(skip_locked=True).filter(machine=msg.machine).order_by("-off_time").first()
+                    if last_row and last_row.on_time is None:
+                        last_row.on_time = msg.ts
+                        last_row.save(update_fields=["on_time"])
+            except Exception as e:
+                LOG.error("Failed flush final ON msg: %s", e)
+                self._append_to_buffer("on", {"mc": msg.machine.device_mc, "status": "on", "timestamp": int(msg.ts.timestamp()*1000)})
 
 
 # --------- Management command ---------

@@ -22,6 +22,9 @@ urlpatterns = [
     ### Report Overll-Performance
     path('overall_performance/', views.overall_performance, name='view_overallperformance'),
 
+    ### Rotation Report
+    path('rotation_report/', views.rotation_report, name='view_rotationreport'),
+
     ### Report Machine-Analysis
     # path('overall_performance/', views.overall_performance, name='view_overallperformance'),
 ]

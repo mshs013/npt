@@ -66,12 +66,13 @@ def menuDelete(request, pk):
 def activitylog(request):
     list_display = ('actor', 'action_type', 'action_time', 'status', 'content_type')
     default_sort = ['-action_time']  # Default sorting by name ascending and created_at descending
-    list_filter = ('action_type', 'status')  # Filters to include in the form
+    list_filter = ('actor', 'action_type', 'status')  # Filters to include in the form
 
     context = {
         'list_display': list_display,
         'default_sort': default_sort,
         'list_filter': list_filter,
+        'per_page': 50,
     }
     
     return dynamic_view(request, 'core', 'ActivityLog', context)

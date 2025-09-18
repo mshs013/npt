@@ -1,5 +1,5 @@
 # frontend/dash_apps/finished_apps/machine_dashboard.py
-from dash import html, dcc, dash_table
+from dash import html, dcc
 from dash.dependencies import Input, Output
 import dash_bootstrap_components as dbc
 from django_plotly_dash import DjangoDash
@@ -11,11 +11,11 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime, timedelta, date, time
 
 
 from frontend.utils.function_chart_helper import process_npt_to_hourly, get_reason_color_map
 from frontend.utils.function_filter import skip_null_on_time_except_last
+from frontend.utils.function_time import get_datetime_range
 
 app = DjangoDash(
     "MachineDashboard_v3",
@@ -77,7 +77,7 @@ def format_seconds_series(seconds_series):
 
 
 def create_styled_table(df, header_color="primary", table_id=None):
-    print("inside styled Table: ", df)
+    # print("inside styled Table: ", df)
     if df.empty:
         return html.Div("No data available.", className="text-center text-muted p-3")
     
@@ -195,34 +195,29 @@ def get_shift_duration_seconds(shift):
 # ---------------------
 # Generate Data (function called inside callback)
 # ---------------------
-def generate_dashboard_data(user=None):
+def generate_dashboard_data(request, user=None):
     # Fetch machines user has access to
     if user is None or isinstance(user, AnonymousUser) or not user.is_authenticated:
         machines = Machine.objects.none()
     else:
         machines = get_user_machines(user)
     
-    current_datetime = datetime.now()
+    date_from, date_to, datetime_from_formatted, datetime_to_formatted = get_datetime_range(request)
 
-    if current_datetime.time() >= time(6, 0):
-        day_start = datetime.combine(current_datetime.date(), time(6, 0))
-        day_end = datetime.combine(current_datetime.date() + timedelta(days=1), time(5, 59, 59))
-    else:
-        day_start = datetime.combine(current_datetime.date() - timedelta(days=1), time(6, 0))
-        day_end = datetime.combine(current_datetime.date(), time(5, 59, 59))
-
+    duration = date_to - date_from
+    time_range_seconds = duration.total_seconds() 
     # --- RotationStatus queryset filtered by user machines and default datetime range ---
     rot_qs = RotationStatus.objects.select_related('machine').filter(
         machine__in=machines,
-        count_time__gte=day_start,
-        count_time__lte=day_end
+        count_time__gte=date_from,
+        count_time__lte=date_to
     )
 
     # --- ProcessedNPT queryset filtered by user machines and default datetime range ---
     npt_qs = ProcessedNPT.objects.select_related('machine', 'reason').filter(
         machine__in=machines,
-        off_time__gte=day_start,
-        off_time__lte=day_end
+        off_time__gte=date_from,
+        off_time__lte=date_to
     )
 
     # removing null values
@@ -305,9 +300,9 @@ def generate_dashboard_data(user=None):
     active_machines = set(npt_df['machine_id'].dropna()) if not npt_df.empty else set()
     all_machine_ids = set(machines.values_list('id', flat=True))
     inactive_machines = all_machine_ids - active_machines
-    print(active_machines)
-    print(all_machine_ids)
-    print(inactive_machines)
+    # print(active_machines)
+    # print(all_machine_ids)
+    # print(inactive_machines)
     # Create inactive machines DataFrame
     inactive_machines_df = pd.DataFrame()
     if inactive_machines:
@@ -344,10 +339,10 @@ def generate_dashboard_data(user=None):
                 'last_activity': last_activity
             })
         inactive_machines_df = pd.DataFrame(inactive_machines_data)
-    print(inactive_machines_df)
+    # print(inactive_machines_df)
     rolls_produced_total = (npt_df['reason'] == "Roll Cutting").sum() if not npt_df.empty else 0
-    now = datetime.now()
-    currentTimeInSeconds = now.hour * 3600 + now.minute * 60 + now.second
+    # now = datetime.now()
+    currentTimeInSeconds = time_range_seconds
     currentTimeInSecondsForAllMachines = currentTimeInSeconds * len(active_machines) if len(active_machines) > 0 else 1
     overall_npt_percent = round(((total_npt)/currentTimeInSecondsForAllMachines)*100, 2) if currentTimeInSecondsForAllMachines > 0 else 0
     overall_pt_percent = round(100 - overall_npt_percent, 2)
@@ -362,7 +357,7 @@ def generate_dashboard_data(user=None):
     npt_summary_table = html.Div("No data available for NPT reasons.", className="text-center")
     
     if not inactive_machines_df.empty:
-            print("hello")
+            # print("hello")
             inactive_machines_table = create_styled_table(
                 clean_column_names(inactive_machines_df),
                 header_color="danger",
@@ -427,8 +422,8 @@ def generate_dashboard_data(user=None):
             
             if shift_name in shift_duration_map:
                 shift_duration = shift_duration_map[shift_name]*len(active_machines)
-                print("shift Duration: ", shift_duration_map[shift_name])
-                print("Shift Duration for all machines: ", shift_duration)
+                # print("shift Duration: ", shift_duration_map[shift_name])
+                # print("Shift Duration for all machines: ", shift_duration)
                 # Performance = (Productive Time / Total Shift Time) * 100
                 # Productive Time = Shift Duration - NPT Time
                 performance = ((shift_duration - total_npt) / shift_duration) * 100
@@ -873,7 +868,7 @@ def update_dashboard(n_intervals, callback_context=None, request=None, user=None
     if not user or not user.is_authenticated:
         user = AnonymousUser()
 
-    data = generate_dashboard_data(user=user)
+    data = generate_dashboard_data(request, user=user)
     figs = data["figs"]
     tables = data["tables"]
 

@@ -75,6 +75,10 @@ class User(AbstractBaseUser, PermissionsMixin):
         if self.first_name and self.last_name:
             full_name = '%s %s' % (self.first_name, self.last_name)
             return full_name.strip()
+        elif self.first_name:
+            return self.first_name.strip()
+        elif self.last_name:
+            return self.last_name.strip()
         return self.email
 
 class ActivityLog(models.Model):
