@@ -177,7 +177,8 @@
     </div>
 </div>
 
-<!-- <div class="row">
+{% if superuser %}
+<div class="row">
     <div class="col-12">
         
         <div class="card">
@@ -226,7 +227,8 @@
             </div>
         </div>
     </div>
-</div> -->
+</div>
+{% endif %}
 
 <div class="row">
     <div class="col-12">
@@ -281,22 +283,27 @@
     <script type="text/javascript" src="{% static 'adminlte/plugins/moment/moment.min.js' %}"></script>
     <script type="text/javascript" src="{% static 'adminlte/plugins/tempusdominus-bootstrap-4/js/tempusdominus-bootstrap-4.min.js' %}"></script>
     <script type="text/javascript">
+        setInterval(() => {
+            // Get current time
+            const now = moment();
 
-setInterval(() => {
-    // Get current time
-    const now = new Date();
+            // Format it the same way your datetimepicker expects
+            const formatted = now.format('DD/MM/YYYY h:mm A');
 
-    // Format it the same way your datetimepicker expects
-    // (your config uses format: 'DD/MM/YYYY h:mm A')
-    const formatted = moment(now).format('DD/MM/YYYY h:mm A');
+            // Get the current value of the input
+            const input = document.querySelector('input[name="datetime_to"]');
+            const inputValue = moment(input.value, 'DD/MM/YYYY h:mm A');
 
-    // Update the "To DateTime" input field
-    document.querySelector('input[name="datetime_to"]').value = formatted;
+            // Check if input is 1 minute behind
+            if (now.diff(inputValue, 'minutes') == 1) {
+                // Update the "To DateTime" input field
+                input.value = formatted;
 
-    // Submit the filter form
-    document.getElementById("filterForm").submit();
+                // Submit the filter form
+                document.getElementById("filterForm").submit();
+            }
 
-}, 60000); // 60 seconds
+        }, 60000); // 60 seconds
 
 
         $(document).ready(function () {

@@ -215,10 +215,10 @@
                          <td>{{ forloop.counter0|add:page_obj.start_index }}</td>
                         <td>{{ record.machine.mc_no }}</td>
                         <td>{{ record.reason.name|default:"N/A" }}</td>
-                        <td>{{ record.off_time|date:"M d, Y H:i" }}</td>
+                        <td>{{ record.off_time|date:"M d, Y H:i:s" }}</td>
                         <td>
                             {% if record.on_time %}
-                                {{ record.on_time|date:"M d, Y H:i" }}
+                                {{ record.on_time|date:"M d, Y H:i:s" }}
                             {% else %}
                                 <span class="text-muted">Still off</span>
                             {% endif %}
@@ -249,20 +249,25 @@
 <script type="text/javascript" src="{% static 'adminlte/plugins/tempusdominus-bootstrap-4/js/tempusdominus-bootstrap-4.min.js' %}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
-
 setInterval(() => {
     // Get current time
-    const now = new Date();
+    const now = moment();
 
     // Format it the same way your datetimepicker expects
-    // (your config uses format: 'DD/MM/YYYY h:mm A')
-    const formatted = moment(now).format('DD/MM/YYYY h:mm A');
+    const formatted = now.format('DD/MM/YYYY h:mm A');
 
-    // Update the "To DateTime" input field
-    document.querySelector('input[name="datetime_to"]').value = formatted;
+    // Get the current value of the input
+    const input = document.querySelector('input[name="datetime_to"]');
+    const inputValue = moment(input.value, 'DD/MM/YYYY h:mm A');
 
-    // Submit the filter form
-    document.getElementById("filterForm").submit();
+    // Check if input is 1 minute behind
+    if (now.diff(inputValue, 'minutes') == 1) {
+        // Update the "To DateTime" input field
+        input.value = formatted;
+
+        // Submit the filter form
+        document.getElementById("filterForm").submit();
+    }
 
 }, 60000); // 60 seconds
 

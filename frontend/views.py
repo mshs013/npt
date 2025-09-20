@@ -1,7 +1,9 @@
 from django.shortcuts import render
 from core.middleware import skip_permission
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from datetime import datetime, date, time, timedelta
+from django.db.models import Q
+from django.utils.timezone import make_aware
 from core.models import ProcessedNPT, RotationStatus, Machine, NptReason
 from library.models import Shift
 import pandas as pd
@@ -28,6 +30,7 @@ from frontend.utils.function_rotation_helper import split_records_by_blocks_mult
 def dashboard(request):
     context = { 'title' : 'Dashboard' }
     return render(request, 'frontend/dashboard.html', context)
+
 
 
 ### McLogs
@@ -104,6 +107,8 @@ def mclogs(request):
     npt_records = skip_null_on_time_except_last(npt_records)
     npt_qs = npt_records.order_by('-off_time')
 
+    
+
     npt_qs, paginator = paginate_queryset(request, npt_qs, 50)
 
     # Calculate time range in seconds
@@ -127,6 +132,7 @@ def mclogs(request):
             machine_data[machine_name] = {}
         machine_data[machine_name][reason_name] = machine_data[machine_name].get(reason_name, 0) + duration
         
+
     # Format reasons data
     reasons = [
         {"name": reason_name, "count": count}
@@ -169,6 +175,7 @@ def mclogs(request):
     #   time_range_seconds*total_machines_no -> to get total duration across all machines otherwise the npt % would be way over 100%
     #   Equation -> total_npt_percentage = total_npt_all/(time_range_seconds*total_machines_no)
     
+
     machine_choices = machines.filter(is_deleted=False)  # Assuming SoftDeleteModel has is_deleted
     all_reasons = NptReason.objects.filter(is_deleted=False).order_by('name')
     total_machines_no = len(machines_list) if len(machines_list) != 0 else 1
@@ -204,7 +211,7 @@ def mcgraph(request):
     context = { 'title' : 'Machine Graph' }
     return render(request, 'frontend/mcgraph.html', context)
 
-@skip_permission
+
 def mcgraph_api(request):
     """API endpoint to provide NPT data for the chart"""
     try:
@@ -253,17 +260,19 @@ def rotaionCounter(request):
     else:
         machines = get_user_machines(request.user)
 
+    # print(machines)
+    
     # Get filter parameters from request
-    machine_filter = request.GET.get('machine', '')
+    machine_filter = request.GET.get('machine', '29')
     shift_filter = request.GET.get('shift', '')
     
     from_datetime, to_datetime, datetime_from_formatted, datetime_to_formatted = get_datetime_range(request)
     
-    pprint(datetime_from_formatted)
-    pprint(datetime_to_formatted)
+    #pprint(datetime_from_formatted)
+    #pprint(datetime_to_formatted)
 
-    print(from_datetime)
-    print(to_datetime)
+    #print(from_datetime)
+    #print(to_datetime)
 
 
     duration = to_datetime - from_datetime
@@ -272,15 +281,17 @@ def rotaionCounter(request):
     # Base queryset for rotation records - filter by user machines
     rotation_qs = RotationStatus.objects.select_related('machine').filter(
         machine__in=machines,
-        count_time__range=(from_datetime, to_datetime),
+        #count_time__range=(from_datetime, to_datetime),
         # count_time__lte=to_datetime
+    ).filter(
+        Q(count_time__lte=to_datetime) & Q(count_time__gte=from_datetime)
     )
     
     # Base queryset for NPT records - filter by user machines
     npt_qs = ProcessedNPT.objects.select_related('machine', 'reason').filter(
-        machine__in=machines,
-        off_time__range=(from_datetime, to_datetime),
-        # off_time__lte=to_datetime
+        machine__in=machines
+    ).filter(
+        Q(off_time__lte=to_datetime) & (Q(on_time__gte=from_datetime) | Q(on_time__isnull=True))
     )
 
     # Apply machine filter
@@ -307,17 +318,32 @@ def rotaionCounter(request):
             
         except (Shift.DoesNotExist, ValueError, TypeError):
             pass
+    
+    # Skipping Null on_Times from npt_qs
+    npt_qs = skip_null_on_time_except_last(npt_qs)
+
+    # Build Q object for all NPT intervals
+    exclude_q = Q()
+    for npt in npt_qs:
+        start = npt.off_time
+        end = npt.on_time or to_datetime  # Ongoing NPT
+        if start.tzinfo is None:
+            start = make_aware(start)
+        if end.tzinfo is None:
+            end = make_aware(end)
+        exclude_q |= Q(count_time__gte=start, count_time__lt=end)
+
+    # Exclude rotations during NPT
+    rotation_qs = rotation_qs.exclude(exclude_q)
 
     # Fetch records ordered for processing rolls (chronologically per machine)
     page_obj = rotation_qs.order_by('machine__mc_no', '-count_time')
 
     rotation_records, paginator = paginate_queryset(request, page_obj, 50)
-    print(rotation_qs.query)
-    print(len(rotation_records))
+    #print(rotation_qs.query)
+    #print(len(rotation_records))
     # print(len(page_obj))
     # exit()
-    # Skipping Null on_Times from npt_qs
-    npt_qs = skip_null_on_time_except_last(npt_qs)
 
     # Calculate total duration of the selected window
     # duration = to_datetime - from_datetime
@@ -473,10 +499,10 @@ def rotaionCounter(request):
         total_duration = sum(r['duration_minutes'] for r in rolls)
         total_productive = sum(r['productive_minutes'] for r in rolls)
         total_npt = sum(r['npt_minutes'] for r in rolls) + (total_duration_minutes-total_duration)
-        print("Total Npt: ", total_npt)
-        print("total_counts: ", total_counts)
-        print("total_duration_minutes: ", total_duration_minutes)
-        print("total_duration: ",total_duration)
+        #print("Total Npt: ", total_npt)
+        #print("total_counts: ", total_counts)
+        #print("total_duration_minutes: ", total_duration_minutes)
+        #print("total_duration: ",total_duration)
         # Calculate overall average RPM based on total counts and total productive time
         overall_avg_rpm = 0
         if total_productive > 0 and total_counts > 0:
@@ -547,6 +573,7 @@ def rotaionCounter(request):
         'total_productive_all':round(total_productive_all+total_npt_summary,2),
         'overall_avg_rpm': round(overall_avg_rpm, 2),
         'current_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'superuser': request.user.is_superuser,
         'title': 'Rotation Counter',
     }
     
