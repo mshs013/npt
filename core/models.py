@@ -348,6 +348,67 @@ class UserMachinePermission(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     machines = models.ManyToManyField(Machine, blank=True)
 
+class MachineStatus(models.Model):
+    STATUS_CHOICES = [
+        ("on", "ON"),
+        ("off", "OFF"),
+        ("btn", "BUTTON"),
+    ]
+    machine = models.ForeignKey(
+        Machine,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="machine_statuses"
+    )
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES)
+    reason = models.ForeignKey(
+        NptReason,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+    status_time = models.DateTimeField()
+
+    class Meta:
+        verbose_name = "Machine Status"
+        verbose_name_plural = "Machine Status"
+        constraints = [
+            models.UniqueConstraint(fields=["machine", "status_time"], name="unique_machine_status_time")
+        ]
+        indexes = [
+            models.Index(fields=["machine", "status_time"]),
+        ]
+        ordering = ["-status_time"]
+
+    def __str__(self):
+        return f"{self.machine.mc_no} - {self.status} @ {self.status_time}"
+
+class RotationStatus(models.Model):
+    machine = models.ForeignKey(
+        Machine,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="rotation_statuses"
+    )
+    count = models.IntegerField()
+    count_time = models.DateTimeField()
+
+    class Meta:
+        verbose_name = "Rotation Status"
+        verbose_name_plural = "Rotation Status"
+        constraints = [
+            models.UniqueConstraint(fields=["machine", "count_time"], name="unique_machine_count_time")
+        ]
+        indexes = [
+            models.Index(fields=["machine", "count_time"]),
+        ]
+        ordering = ["-count_time"]
+
+    def __str__(self):
+        return f"{self.machine.mc_no} - {self.count} @ {self.count_time}"
+
 class ProcessedNPT(models.Model):
     machine = models.ForeignKey(
         Machine,
@@ -385,24 +446,6 @@ class ProcessedNPT(models.Model):
 
     def __str__(self):
         return f"{self.machine}"
-
-class RotationStatus(models.Model):
-    machine = models.ForeignKey(
-        Machine,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="rotation_statuses"
-    )
-    count = models.IntegerField()
-    count_time = models.DateTimeField()
-
-    class Meta:
-        verbose_name = "Rotation Status"
-        verbose_name_plural = "Rotation Status"
-        constraints = [
-            models.UniqueConstraint(fields=["machine", "count_time"], name="unique_machine_count_time")
-        ]
 
 class ProcessorCursor(models.Model):
     """

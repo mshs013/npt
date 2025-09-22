@@ -12,6 +12,7 @@ __pycache__/
 # Ignore static files and cached menu
 staticfiles/
 menu_cache/
+mqtt_buffer/
 
 # Ignore environment variable file
 .env
