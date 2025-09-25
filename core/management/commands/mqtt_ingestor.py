@@ -164,6 +164,12 @@ class Ingestor:
 
     # ---------- Enqueue with duplicate check ----------
     def enqueue_status(self, data: Dict[str, Any]):
+        """
+        Enqueue machine status or button events, skipping duplicates:
+        - For 'on'/'off': skip if same as last state.
+        - For 'btn': skip if same as last button since last 'off'.
+        - Reset last_btn when machine goes 'off'.
+        """
         try:
             mc_raw = str(data["mc"]).strip().lower()
             status = str(data["status"]).strip().lower()
@@ -182,23 +188,48 @@ class Ingestor:
             self.stats["status_unknown"] += 1
             return
 
-        # Ignore same status repeats
-        with self.state_lock:
-            if self.last_status.get(machine.id) == status:
-                self.stats["status_dup_state"] += 1
-                return
-            self.last_status[machine.id] = status
-
-        msg = MachineMsg(machine=machine, status=status, ts=ts)
+        btn = None
+        reason_id = None
         if status == "btn":
             try:
                 btn = int(data.get("btn", -1))
-                msg.btn = btn
-                msg.reason_id = reason_map_copy.get(btn)
+                reason_id = reason_map_copy.get(btn)
             except Exception:
                 self._append_to_buffer("status_overflow", data)
                 return
 
+        save_msg = True
+        with self.state_lock:
+            # Initialize last states if not present
+            if not hasattr(self, "last_btn"):
+                self.last_btn = {}
+            if not hasattr(self, "last_status"):
+                self.last_status = {}
+
+            last_state = self.last_status.get(machine.id)
+            last_btn = self.last_btn.get(machine.id)
+
+            if status in ("on", "off"):
+                if last_state == status:
+                    save_msg = False  # Skip duplicate on/off
+                else:
+                    self.last_status[machine.id] = status
+                    if status == "off":
+                        # Reset button memory on OFF
+                        self.last_btn[machine.id] = None
+            elif status == "btn":
+                # Only skip if same button pressed since last OFF
+                if last_btn == btn:
+                    save_msg = False
+                else:
+                    self.last_btn[machine.id] = btn
+
+        if not save_msg:
+            self.stats[f"{status}_dup_state"] += 1
+            return
+
+        # Enqueue message
+        msg = MachineMsg(machine=machine, status=status, ts=ts, btn=btn, reason_id=reason_id)
         try:
             self.q_status.put_nowait(msg)
             self.stats[f"{status}_enqueued"] += 1
